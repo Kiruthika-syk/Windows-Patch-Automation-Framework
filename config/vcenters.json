@@ -1,0 +1,20 @@
+{
+  "default": "blr-vsphere-01.strykercorp.com",
+  "sites": [
+    {
+      "id": "BLR",
+      "server": "blr-vsphere-01.strykercorp.com",
+      "uiUrl": "https://blr-vsphere-01.strykercorp.com/ui/app/"
+    },
+    {
+      "id": "FW",
+      "server": "fw-vsphere-01.strykercorp.com",
+      "uiUrl": "https://fw-vsphere-01.strykercorp.com/ui/"
+    },
+    {
+      "id": "STC",
+      "server": "stc-vsphere-01.strykercorp.com",
+      "uiUrl": "https://stc-vsphere-01.strykercorp.com/ui/"
+    }
+  ]
+}

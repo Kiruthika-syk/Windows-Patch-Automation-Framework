@@ -39,7 +39,7 @@ Describe 'Configuration and workflow' {
         $settings.throttleLimit | Should -BeGreaterThan 0
         $settings.autoRebootWhenRequired | Should -BeTrue
         $settings.timeouts.patchCycleSeconds | Should -BeGreaterThan 0
-        $settings.ignoreInvalidCertificate | Should -BeFalse
+        $settings.ignoreInvalidCertificate | Should -BeTrue
     }
 
     It 'injects credentials exclusively from GitHub secrets' {

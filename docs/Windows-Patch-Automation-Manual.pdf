@@ -1,0 +1,520 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 3737 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (Windows Patch Automation Framework) Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (Operations Manual) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td () Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (Repository: https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td (Version: 1.0) Tj 0 -13 Td
+/F1 10 Tf 48 735 Td (Date: September 2026) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td () Tj 0 -13 Td
+/F1 10 Tf 48 709 Td () Tj 0 -13 Td
+/F1 10 Tf 48 696 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 683 Td () Tj 0 -13 Td
+/F2 11 Tf 48 670 Td (1. Executive Summary) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td () Tj 0 -13 Td
+/F1 10 Tf 48 644 Td (This framework automates Windows security and quality updates on VMware virtual machines. It) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td (scans for missing updates, installs them automatically, reboots the VM when a restart is) Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (required, and repeats until the server is fully patched or a safety limit is reached.) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td () Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (The solution is designed for enterprise use. It does not use WinRM, RDP, or direct network) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (login to Windows servers. All guest interaction happens through VMware vCenter Guest) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (Operations \(PowerCLI\).) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td () Tj 0 -13 Td
+/F1 10 Tf 48 540 Td () Tj 0 -13 Td
+/F1 10 Tf 48 527 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 514 Td () Tj 0 -13 Td
+/F2 11 Tf 48 501 Td (2. Will This Code Work?) Tj 0 -13 Td
+/F1 10 Tf 48 488 Td () Tj 0 -13 Td
+/F2 11 Tf 48 475 Td (2.1 What is already validated) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td () Tj 0 -13 Td
+/F1 10 Tf 48 449 Td (Item  |  Status) Tj 0 -13 Td
+/F1 10 Tf 48 436 Td (|------|--------|) Tj 0 -13 Td
+/F1 10 Tf 48 423 Td (PowerShell syntax  |  Passed \(all scripts parse cleanly\)) Tj 0 -13 Td
+/F1 10 Tf 48 410 Td (Unit and static tests  |  16/16 Pester tests pass) Tj 0 -13 Td
+/F1 10 Tf 48 397 Td (Auto-update logic  |  Implemented in guest script) Tj 0 -13 Td
+/F1 10 Tf 48 384 Td (Auto-reboot logic  |  Implemented in orchestrator) Tj 0 -13 Td
+/F1 10 Tf 48 371 Td (GitHub workflow structure  |  Valid YAML, correct paths) Tj 0 -13 Td
+/F1 10 Tf 48 358 Td (Code pushed to GitHub  |  Available on Kiruthika-syk account) Tj 0 -13 Td
+/F1 10 Tf 48 345 Td () Tj 0 -13 Td
+/F2 11 Tf 48 332 Td (2.2 What you must configure before it works in production) Tj 0 -13 Td
+/F1 10 Tf 48 319 Td () Tj 0 -13 Td
+/F1 10 Tf 48 306 Td (The code is technically correct but will not run successfully until the following are in place:) Tj 0 -13 Td
+/F1 10 Tf 48 293 Td () Tj 0 -13 Td
+/F2 11 Tf 48 280 Td (1. Self-hosted GitHub Actions runner) Tj 0 -13 Td
+/F1 10 Tf 48 267 Td (- Must be Windows) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td (- Must have labels: self-hosted, windows, vcenter) Tj 0 -13 Td
+/F1 10 Tf 48 241 Td (- Must reach vCenter on HTTPS \(port 443\)) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td (- Must have PowerShell 7.2 or later) Tj 0 -13 Td
+/F1 10 Tf 48 215 Td () Tj 0 -13 Td
+/F2 11 Tf 48 202 Td (2. vCenter access) Tj 0 -13 Td
+/F1 10 Tf 48 189 Td (- Update config/settings.json with your real vCenter FQDN) Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (- Create a vCenter service account with Guest Operations permissions) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td (- Store credentials in GitHub secrets: VCENTER_USERNAME, VCENTER_PASSWORD) Tj 0 -13 Td
+/F1 10 Tf 48 150 Td () Tj 0 -13 Td
+/F2 11 Tf 48 137 Td (3. Windows guest requirements) Tj 0 -13 Td
+/F1 10 Tf 48 124 Td (- VMware Tools installed and running on every target VM) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td (- VM must be powered on) Tj 0 -13 Td
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Length 3517 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (- Guest admin account with local administrator rights) Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (- Store credentials in GitHub secrets: WINDOWS_GUEST_USERNAME, WINDOWS_GUEST_PASSWORD) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td (- Windows Update must reach WSUS or Microsoft Update) Tj 0 -13 Td
+/F1 10 Tf 48 761 Td () Tj 0 -13 Td
+/F2 11 Tf 48 748 Td (4. Inventory configuration) Tj 0 -13 Td
+/F1 10 Tf 48 735 Td (- Edit config/vms.csv with exact vCenter VM names) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td (- Set Enabled=true only for approved servers) Tj 0 -13 Td
+/F1 10 Tf 48 709 Td () Tj 0 -13 Td
+/F2 11 Tf 48 696 Td (5. GitHub environment) Tj 0 -13 Td
+/F1 10 Tf 48 683 Td (- Create environment named windows-patching) Tj 0 -13 Td
+/F1 10 Tf 48 670 Td (- Add the four secrets above to that environment) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td () Tj 0 -13 Td
+/F2 11 Tf 48 644 Td (2.3 Honest assessment) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td () Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (Scenario  |  Will it work?) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (|----------|---------------|) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (Run as-is without configuration  |  No) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (After full setup with test VM  |  Yes) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (Scheduled weekly patching of fleet  |  Yes, once runner and secrets are ready) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (Patching without VMware/vCenter  |  No ? this framework requires VMware) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td () Tj 0 -13 Td
+/F1 10 Tf 48 527 Td (Recommendation: Test on one non-production VM with a snapshot before enabling the weekly) Tj 0 -13 Td
+/F1 10 Tf 48 514 Td (schedule.) Tj 0 -13 Td
+/F1 10 Tf 48 501 Td () Tj 0 -13 Td
+/F1 10 Tf 48 488 Td () Tj 0 -13 Td
+/F1 10 Tf 48 475 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td () Tj 0 -13 Td
+/F2 11 Tf 48 449 Td (3. What It Does) Tj 0 -13 Td
+/F1 10 Tf 48 436 Td () Tj 0 -13 Td
+/F2 11 Tf 48 423 Td (3.1 High-level purpose) Tj 0 -13 Td
+/F1 10 Tf 48 410 Td () Tj 0 -13 Td
+/F1 10 Tf 48 397 Td (- Finds Windows updates that are not yet installed) Tj 0 -13 Td
+/F1 10 Tf 48 384 Td (- Downloads and installs them automatically) Tj 0 -13 Td
+/F1 10 Tf 48 371 Td (- Accepts update EULAs without manual intervention) Tj 0 -13 Td
+/F1 10 Tf 48 358 Td (- Reboots the VM when Windows Update requires a restart) Tj 0 -13 Td
+/F1 10 Tf 48 345 Td (- Keeps scanning and patching until no updates remain) Tj 0 -13 Td
+/F1 10 Tf 48 332 Td (- Produces compliance reports \(CSV, HTML, JSON\)) Tj 0 -13 Td
+/F1 10 Tf 48 319 Td (- Uploads logs and reports as GitHub Actions artifacts) Tj 0 -13 Td
+/F1 10 Tf 48 306 Td () Tj 0 -13 Td
+/F2 11 Tf 48 293 Td (3.2 What it does NOT do) Tj 0 -13 Td
+/F1 10 Tf 48 280 Td () Tj 0 -13 Td
+/F1 10 Tf 48 267 Td (- Does not patch physical servers \(only VMware VMs\)) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td (- Does not use Ansible, WinRM, or SSH) Tj 0 -13 Td
+/F1 10 Tf 48 241 Td (- Does not create VM snapshots automatically) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td (- Does not patch Linux systems) Tj 0 -13 Td
+/F1 10 Tf 48 215 Td (- Does not store passwords in config files) Tj 0 -13 Td
+/F1 10 Tf 48 202 Td () Tj 0 -13 Td
+/F1 10 Tf 48 189 Td () Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td () Tj 0 -13 Td
+/F2 11 Tf 48 150 Td (4. How It Works \(Architecture\)) Tj 0 -13 Td
+/F1 10 Tf 48 137 Td () Tj 0 -13 Td
+/F2 11 Tf 48 124 Td (4.1 Components) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td () Tj 0 -13 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 3389 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (GitHub Actions Workflow) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (v) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td (Invoke-WindowsPatchAutomation.ps1  \(Orchestrator on runner\)) Tj 0 -13 Td
+/F1 10 Tf 48 735 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td (+-- Connect to vCenter \(PowerCLI\)) Tj 0 -13 Td
+/F1 10 Tf 48 709 Td (+-- For each VM in vms.csv \(parallel, throttled\)) Tj 0 -13 Td
+/F1 10 Tf 48 696 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 683 Td (v) Tj 0 -13 Td
+/F1 10 Tf 48 670 Td (VCenter.GuestOps.psm1) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 644 Td (+-- Copy Invoke-WindowsUpdate.ps1 into guest) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td (+-- Start update script inside guest) Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (+-- Poll for completion) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (+-- Reboot guest if required) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (+-- Repeat until compliant) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (v) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (Invoke-WindowsUpdate.ps1  \(Runs inside Windows VM\)) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td (|) Tj 0 -13 Td
+/F1 10 Tf 48 527 Td (+-- Scan \(Microsoft.Update.Session COM\)) Tj 0 -13 Td
+/F1 10 Tf 48 514 Td (+-- Accept EULAs) Tj 0 -13 Td
+/F1 10 Tf 48 501 Td (+-- Download updates) Tj 0 -13 Td
+/F1 10 Tf 48 488 Td (+-- Install updates) Tj 0 -13 Td
+/F1 10 Tf 48 475 Td (+-- Write result JSON + logs) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 449 Td () Tj 0 -13 Td
+/F2 11 Tf 48 436 Td (4.2 Step-by-step execution flow) Tj 0 -13 Td
+/F1 10 Tf 48 423 Td () Tj 0 -13 Td
+/F1 10 Tf 48 410 Td (Phase A ? Validation \(GitHub hosted runner, Ubuntu\)) Tj 0 -13 Td
+/F2 11 Tf 48 397 Td (1. Checkout repository) Tj 0 -13 Td
+/F2 11 Tf 48 384 Td (2. Install Pester test module) Tj 0 -13 Td
+/F2 11 Tf 48 371 Td (3. Run 16 automated tests) Tj 0 -13 Td
+/F2 11 Tf 48 358 Td (4. If tests fail, patching job does not start) Tj 0 -13 Td
+/F1 10 Tf 48 345 Td () Tj 0 -13 Td
+/F1 10 Tf 48 332 Td (Phase B ? Patching \(Self-hosted Windows runner\)) Tj 0 -13 Td
+/F2 11 Tf 48 319 Td (1. Checkout repository) Tj 0 -13 Td
+/F2 11 Tf 48 306 Td (2. Install VMware PowerCLI 13.3) Tj 0 -13 Td
+/F2 11 Tf 48 293 Td (3. Read config/settings.json and config/vms.csv) Tj 0 -13 Td
+/F2 11 Tf 48 280 Td (4. Load credentials from GitHub secrets \(never from disk\)) Tj 0 -13 Td
+/F2 11 Tf 48 267 Td (5. For each enabled VM:) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td (- Connect to vCenter) Tj 0 -13 Td
+/F1 10 Tf 48 241 Td (- Verify VM is powered on and VMware Tools is running) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td (- Create guest working folder: C:\\ProgramData\\EnterprisePatchAutomation) Tj 0 -13 Td
+/F1 10 Tf 48 215 Td (- Copy patch script to guest) Tj 0 -13 Td
+/F1 10 Tf 48 202 Td (- Run update cycle inside guest) Tj 0 -13 Td
+/F1 10 Tf 48 189 Td (- Wait for cycle to finish \(up to 2 hours per cycle\)) Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (- If reboot required and autoRebootWhenRequired=true, restart VM) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td (- Wait for VMware Tools to return after reboot) Tj 0 -13 Td
+/F1 10 Tf 48 150 Td (- Repeat until no updates found or maxPatchCycles reached) Tj 0 -13 Td
+/F2 11 Tf 48 137 Td (6. Generate compliance reports in output/<run-id>/) Tj 0 -13 Td
+/F2 11 Tf 48 124 Td (7. Upload output folder as workflow artifact) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td () Tj 0 -13 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 4058 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (Phase C ? Guest update cycle \(inside Windows VM\)) Tj 0 -13 Td
+/F2 11 Tf 48 787 Td (1. Create Windows Update session \(COM API\)) Tj 0 -13 Td
+/F2 11 Tf 48 774 Td (2. Search for updates matching: IsInstalled=0 and IsHidden=0) Tj 0 -13 Td
+/F2 11 Tf 48 761 Td (3. If no updates and no pending reboot ? status NoUpdates \(compliant\)) Tj 0 -13 Td
+/F2 11 Tf 48 748 Td (4. If no updates but reboot pending ? status RebootRequired) Tj 0 -13 Td
+/F2 11 Tf 48 735 Td (5. Accept EULAs for applicable updates) Tj 0 -13 Td
+/F2 11 Tf 48 722 Td (6. Download updates) Tj 0 -13 Td
+/F2 11 Tf 48 709 Td (7. Install updates) Tj 0 -13 Td
+/F2 11 Tf 48 696 Td (8. Record KB numbers, result codes, reboot flag) Tj 0 -13 Td
+/F2 11 Tf 48 683 Td (9. Write cycle-N-result.json and cycle-N-log.jsonl) Tj 0 -13 Td
+/F1 10 Tf 48 670 Td () Tj 0 -13 Td
+/F2 11 Tf 48 657 Td (4.3 Convergence loop example) Tj 0 -13 Td
+/F1 10 Tf 48 644 Td () Tj 0 -13 Td
+/F1 10 Tf 48 631 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (Cycle 1: Found 5 updates ? Installed ? Reboot required ? Reboot VM) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (Cycle 2: Found 2 updates ? Installed ? Reboot required ? Reboot VM) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (Cycle 3: Found 0 updates ? Status: Compliant ? Done) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td () Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (Maximum cycles default: 5 \(configurable in settings.json\)) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td () Tj 0 -13 Td
+/F1 10 Tf 48 527 Td () Tj 0 -13 Td
+/F1 10 Tf 48 514 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 501 Td () Tj 0 -13 Td
+/F2 11 Tf 48 488 Td (5. Configuration Reference) Tj 0 -13 Td
+/F1 10 Tf 48 475 Td () Tj 0 -13 Td
+/F2 11 Tf 48 462 Td (5.1 config/settings.json) Tj 0 -13 Td
+/F1 10 Tf 48 449 Td () Tj 0 -13 Td
+/F1 10 Tf 48 436 Td (Setting  |  Default  |  Description) Tj 0 -13 Td
+/F1 10 Tf 48 423 Td (|---------|---------|-------------|) Tj 0 -13 Td
+/F1 10 Tf 48 410 Td (vCenterServer  |  vcenter.example.com  |  vCenter FQDN ? must change) Tj 0 -13 Td
+/F1 10 Tf 48 397 Td (ignoreInvalidCertificate  |  false  |  Keep false in production) Tj 0 -13 Td
+/F1 10 Tf 48 384 Td (guestWorkingDirectory  |  C:\\ProgramData\\EnterprisePatchAutomation  |  Staging folder inside) Tj 0 -13 Td
+/F1 10 Tf 48 371 Td (guest) Tj 0 -13 Td
+/F1 10 Tf 48 358 Td (windowsUpdateSearchCriteria  |  IsInstalled=0 and IsHidden=0  |  WUA search filter) Tj 0 -13 Td
+/F1 10 Tf 48 345 Td (autoRebootWhenRequired  |  true  |  Auto-reboot after updates needing restart) Tj 0 -13 Td
+/F1 10 Tf 48 332 Td (maxPatchCycles  |  5  |  Safety cap on scan/install loops) Tj 0 -13 Td
+/F1 10 Tf 48 319 Td (throttleLimit  |  4  |  Max VMs patched in parallel) Tj 0 -13 Td
+/F1 10 Tf 48 306 Td (pollIntervalSeconds  |  15  |  Guest operation polling interval) Tj 0 -13 Td
+/F1 10 Tf 48 293 Td (timeouts.patchCycleSeconds  |  7200  |  Max seconds per update cycle \(2 hours\)) Tj 0 -13 Td
+/F1 10 Tf 48 280 Td (timeouts.rebootSeconds  |  1800  |  Max seconds to wait for VM after reboot) Tj 0 -13 Td
+/F1 10 Tf 48 267 Td (retry.maxAttempts  |  3  |  Retries for transient vCenter errors) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td () Tj 0 -13 Td
+/F2 11 Tf 48 241 Td (5.2 config/vms.csv) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td () Tj 0 -13 Td
+/F1 10 Tf 48 215 Td (Column  |  Required  |  Example  |  Description) Tj 0 -13 Td
+/F1 10 Tf 48 202 Td (|--------|----------|---------|-------------|) Tj 0 -13 Td
+/F1 10 Tf 48 189 Td (VMName  |  Yes  |  WIN-APP-01  |  Exact name in vCenter inventory) Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (Enabled  |  Yes  |  true  |  Must be true/yes/1 to patch) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td (VCenterServer  |  No  |  vc01.corp.local  |  Override default vCenter) Tj 0 -13 Td
+/F1 10 Tf 48 150 Td (Environment  |  No  |  Production  |  Metadata only) Tj 0 -13 Td
+/F1 10 Tf 48 137 Td (Owner  |  No  |  Infrastructure  |  Metadata only) Tj 0 -13 Td
+/F1 10 Tf 48 124 Td (MaintenanceWindow  |  No  |  Sunday-0200-UTC  |  Metadata only) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td () Tj 0 -13 Td
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 3652 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (Example:) Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td (VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow) Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (WIN-APP-01,true,vcenter.corp.local,Production,Infra,Sunday-0200-UTC) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td (WIN-APP-02,false,,Production,Infra,Sunday-0200-UTC) Tj 0 -13 Td
+/F1 10 Tf 48 735 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td () Tj 0 -13 Td
+/F1 10 Tf 48 709 Td () Tj 0 -13 Td
+/F1 10 Tf 48 696 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 683 Td () Tj 0 -13 Td
+/F2 11 Tf 48 670 Td (6. How to Execute) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td () Tj 0 -13 Td
+/F2 11 Tf 48 644 Td (6.1 One-time setup checklist) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td () Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (- [ ] Clone repo: git clone) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework.git) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (- [ ] Edit config/settings.json ? set vCenterServer) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (- [ ] Edit config/vms.csv ? add VMs, set Enabled=true for test VM) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (- [ ] Register self-hosted Windows runner with labels: self-hosted, windows, vcenter) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (- [ ] Create GitHub environment: windows-patching) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td (- [ ] Add secrets to environment:) Tj 0 -13 Td
+/F2 12 Tf 48 527 Td (- VCENTER_USERNAME) Tj 0 -13 Td
+/F2 12 Tf 48 514 Td (- VCENTER_PASSWORD) Tj 0 -13 Td
+/F2 12 Tf 48 501 Td (- WINDOWS_GUEST_USERNAME) Tj 0 -13 Td
+/F2 12 Tf 48 488 Td (- WINDOWS_GUEST_PASSWORD) Tj 0 -13 Td
+/F1 10 Tf 48 475 Td (- [ ] Ensure test VM has VMware Tools running) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td (- [ ] Ensure test VM can reach WSUS or Microsoft Update) Tj 0 -13 Td
+/F1 10 Tf 48 449 Td (- [ ] Take VM snapshot before first test run) Tj 0 -13 Td
+/F1 10 Tf 48 436 Td () Tj 0 -13 Td
+/F2 11 Tf 48 423 Td (6.2 Method 1 ? Run via GitHub Actions \(recommended\)) Tj 0 -13 Td
+/F1 10 Tf 48 410 Td () Tj 0 -13 Td
+/F2 11 Tf 48 397 Td (1. Open: https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework) Tj 0 -13 Td
+/F2 11 Tf 48 384 Td (2. Go to Actions tab) Tj 0 -13 Td
+/F2 11 Tf 48 371 Td (3. Select Windows Patch Automation workflow) Tj 0 -13 Td
+/F2 11 Tf 48 358 Td (4. Click Run workflow) Tj 0 -13 Td
+/F2 11 Tf 48 345 Td (5. Select branch main) Tj 0 -13 Td
+/F2 11 Tf 48 332 Td (6. Click Run workflow) Tj 0 -13 Td
+/F2 11 Tf 48 319 Td (7. Monitor job progress:) Tj 0 -13 Td
+/F1 10 Tf 48 306 Td (- Job 1: Validate framework \(runs on GitHub Ubuntu runner\)) Tj 0 -13 Td
+/F1 10 Tf 48 293 Td (- Job 2: Patch Windows fleet \(runs on your self-hosted runner\)) Tj 0 -13 Td
+/F2 11 Tf 48 280 Td (8. When complete, download artifact: windows-patch-results-<run-id>) Tj 0 -13 Td
+/F2 11 Tf 48 267 Td (9. Review:) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td (- compliance-report.html ? human-readable summary) Tj 0 -13 Td
+/F1 10 Tf 48 241 Td (- compliance-report.csv ? export for tracking) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td (- master.jsonl ? full structured log) Tj 0 -13 Td
+/F1 10 Tf 48 215 Td () Tj 0 -13 Td
+/F2 11 Tf 48 202 Td (6.3 Method 2 ? Run manually on self-hosted runner) Tj 0 -13 Td
+/F1 10 Tf 48 189 Td () Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (On the Windows runner machine:) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td () Tj 0 -13 Td
+/F1 10 Tf 48 150 Td (```powershell) Tj 0 -13 Td
+/F2 11 Tf 48 137 Td (1. Clone repository) Tj 0 -13 Td
+/F1 10 Tf 48 124 Td (git clone https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework.git) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td (cd Windows-Patch-Automation-Framework) Tj 0 -13 Td
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 3523 >>
+stream
+BT
+/F1 10 Tf 48 800 Td () Tj 0 -13 Td
+/F2 11 Tf 48 787 Td (2. Install PowerCLI) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td (Set-PSRepository -Name PSGallery -InstallationPolicy Trusted) Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (Install-Module VMware.PowerCLI -RequiredVersion 13.3.0.24145081 -Scope CurrentUser -Force) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td () Tj 0 -13 Td
+/F2 11 Tf 48 735 Td (3. Set credentials \(session only ? do not save to disk\)) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td ($env:VCENTER_USERNAME = 'svc-vcenter@corp.local') Tj 0 -13 Td
+/F1 10 Tf 48 709 Td ($env:VCENTER_PASSWORD = '<password>') Tj 0 -13 Td
+/F1 10 Tf 48 696 Td ($env:WINDOWS_GUEST_USERNAME = 'CORP\\svc-patch') Tj 0 -13 Td
+/F1 10 Tf 48 683 Td ($env:WINDOWS_GUEST_PASSWORD = '<password>') Tj 0 -13 Td
+/F1 10 Tf 48 670 Td () Tj 0 -13 Td
+/F2 11 Tf 48 657 Td (4. Run orchestrator) Tj 0 -13 Td
+/F1 10 Tf 48 644 Td (./scripts/Invoke-WindowsPatchAutomation.ps1 `) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td (-SettingsPath ./config/settings.json `) Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (-InventoryPath ./config/vms.csv `) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (-OutputDirectory ./output `) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (-FailOnNonCompliance) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td () Tj 0 -13 Td
+/F2 11 Tf 48 566 Td (5. Open reports) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (Start-Process ./output/<run-id>/compliance-report.html) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 527 Td () Tj 0 -13 Td
+/F2 11 Tf 48 514 Td (6.4 Method 3 ? Run tests only \(no vCenter needed\)) Tj 0 -13 Td
+/F1 10 Tf 48 501 Td () Tj 0 -13 Td
+/F1 10 Tf 48 488 Td (```powershell) Tj 0 -13 Td
+/F1 10 Tf 48 475 Td (Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td (Invoke-Pester ./tests -Output Detailed) Tj 0 -13 Td
+/F1 10 Tf 48 449 Td (```) Tj 0 -13 Td
+/F1 10 Tf 48 436 Td () Tj 0 -13 Td
+/F1 10 Tf 48 423 Td (Expected result: 16 tests passed, 0 failed) Tj 0 -13 Td
+/F1 10 Tf 48 410 Td () Tj 0 -13 Td
+/F2 11 Tf 48 397 Td (6.5 Scheduled execution) Tj 0 -13 Td
+/F1 10 Tf 48 384 Td () Tj 0 -13 Td
+/F1 10 Tf 48 371 Td (The workflow runs automatically every Sunday at 02:00 UTC \(cron: 0 2 * * 0\).) Tj 0 -13 Td
+/F1 10 Tf 48 358 Td () Tj 0 -13 Td
+/F1 10 Tf 48 345 Td (To change schedule, edit .github/workflows/windows-patch.yml and align with your maintenance) Tj 0 -13 Td
+/F1 10 Tf 48 332 Td (window in vms.csv.) Tj 0 -13 Td
+/F1 10 Tf 48 319 Td () Tj 0 -13 Td
+/F1 10 Tf 48 306 Td () Tj 0 -13 Td
+/F1 10 Tf 48 293 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 280 Td () Tj 0 -13 Td
+/F2 11 Tf 48 267 Td (7. Output and Reports) Tj 0 -13 Td
+/F1 10 Tf 48 254 Td () Tj 0 -13 Td
+/F1 10 Tf 48 241 Td (Each run creates a folder: output/<run-id>/) Tj 0 -13 Td
+/F1 10 Tf 48 228 Td () Tj 0 -13 Td
+/F1 10 Tf 48 215 Td (File  |  Purpose) Tj 0 -13 Td
+/F1 10 Tf 48 202 Td (|------|---------|) Tj 0 -13 Td
+/F1 10 Tf 48 189 Td (master.jsonl  |  Complete run log \(all VMs\)) Tj 0 -13 Td
+/F1 10 Tf 48 176 Td (compliance-report.html  |  Visual compliance report) Tj 0 -13 Td
+/F1 10 Tf 48 163 Td (compliance-report.csv  |  Spreadsheet export) Tj 0 -13 Td
+/F1 10 Tf 48 150 Td (compliance-report.json  |  Machine-readable full results) Tj 0 -13 Td
+/F1 10 Tf 48 137 Td (vm-logs/<vm>/orchestrator.jsonl  |  Per-VM orchestration log) Tj 0 -13 Td
+/F1 10 Tf 48 124 Td (vm-logs/<vm>/cycle-1-result.json  |  Guest update cycle result) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td (vm-logs/<vm>/cycle-1-guest.jsonl  |  Guest update detailed log) Tj 0 -13 Td
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 3670 >>
+stream
+BT
+/F1 10 Tf 48 800 Td () Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (VM status values) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td () Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (Status  |  Meaning) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td (|--------|---------|) Tj 0 -13 Td
+/F1 10 Tf 48 735 Td (Compliant  |  No applicable updates remain) Tj 0 -13 Td
+/F1 10 Tf 48 722 Td (Failed  |  Error during patching) Tj 0 -13 Td
+/F1 10 Tf 48 709 Td (MaxCyclesExceeded  |  Updates still found after safety cap) Tj 0 -13 Td
+/F1 10 Tf 48 696 Td () Tj 0 -13 Td
+/F1 10 Tf 48 683 Td () Tj 0 -13 Td
+/F1 10 Tf 48 670 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td () Tj 0 -13 Td
+/F2 11 Tf 48 644 Td (8. Troubleshooting Quick Reference) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td () Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (Problem  |  Likely cause  |  Fix) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (|---------|--------------|-----|) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td (Workflow stuck on "Patch Windows fleet"  |  No self-hosted runner  |  Register runner with) Tj 0 -13 Td
+/F1 10 Tf 48 579 Td (correct labels) Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (VM not found  |  Wrong VMName in CSV  |  Match exact vCenter inventory name) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td (Tools readiness timeout  |  VMware Tools not running  |  Repair/start Tools on VM) Tj 0 -13 Td
+/F1 10 Tf 48 540 Td (Guest auth failed  |  Wrong guest credentials  |  Verify admin account in secrets) Tj 0 -13 Td
+/F1 10 Tf 48 527 Td (Certificate error  |  vCenter cert not trusted  |  Install CA on runner; keep) Tj 0 -13 Td
+/F1 10 Tf 48 514 Td (ignoreInvalidCertificate=false) Tj 0 -13 Td
+/F1 10 Tf 48 501 Td (Patch cycle timeout  |  Large update set or slow WSUS  |  Increase patchCycleSeconds; check) Tj 0 -13 Td
+/F1 10 Tf 48 488 Td (WSUS health) Tj 0 -13 Td
+/F1 10 Tf 48 475 Td (MaxCyclesExceeded  |  Many pending updates  |  Review cycle logs; increase maxPatchCycles) Tj 0 -13 Td
+/F1 10 Tf 48 462 Td (after review) Tj 0 -13 Td
+/F1 10 Tf 48 449 Td () Tj 0 -13 Td
+/F1 10 Tf 48 436 Td (Full details: see TROUBLESHOOTING.md in the repository.) Tj 0 -13 Td
+/F1 10 Tf 48 423 Td () Tj 0 -13 Td
+/F1 10 Tf 48 410 Td () Tj 0 -13 Td
+/F1 10 Tf 48 397 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 384 Td () Tj 0 -13 Td
+/F2 11 Tf 48 371 Td (9. Security Notes) Tj 0 -13 Td
+/F1 10 Tf 48 358 Td () Tj 0 -13 Td
+/F1 10 Tf 48 345 Td (- Never commit passwords to git) Tj 0 -13 Td
+/F1 10 Tf 48 332 Td (- Use dedicated service accounts \(not personal accounts\)) Tj 0 -13 Td
+/F1 10 Tf 48 319 Td (- Restrict vCenter permissions to Guest Operations only) Tj 0 -13 Td
+/F1 10 Tf 48 306 Td (- Use GitHub environment protection rules for production) Tj 0 -13 Td
+/F1 10 Tf 48 293 Td (- Do not run untrusted PR code on the privileged runner) Tj 0 -13 Td
+/F1 10 Tf 48 280 Td (- Treat compliance reports as internal security data) Tj 0 -13 Td
+/F1 10 Tf 48 267 Td () Tj 0 -13 Td
+/F1 10 Tf 48 254 Td (Full details: see SECURITY.md in the repository.) Tj 0 -13 Td
+/F1 10 Tf 48 241 Td () Tj 0 -13 Td
+/F1 10 Tf 48 228 Td () Tj 0 -13 Td
+/F1 10 Tf 48 215 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 202 Td () Tj 0 -13 Td
+/F2 11 Tf 48 189 Td (10. Prerequisites Summary) Tj 0 -13 Td
+/F1 10 Tf 48 176 Td () Tj 0 -13 Td
+/F1 10 Tf 48 163 Td (Component  |  Requirement) Tj 0 -13 Td
+/F1 10 Tf 48 150 Td (|-----------|-------------|) Tj 0 -13 Td
+/F1 10 Tf 48 137 Td (Hypervisor  |  VMware vCenter + ESXi) Tj 0 -13 Td
+/F1 10 Tf 48 124 Td (Target OS  |  Windows Server / Windows Client \(VM\)) Tj 0 -13 Td
+/F1 10 Tf 48 111 Td (VMware Tools  |  Installed and running) Tj 0 -13 Td
+ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 1452 >>
+stream
+BT
+/F1 10 Tf 48 800 Td (Runner OS  |  Windows with PowerShell 7.2+) Tj 0 -13 Td
+/F1 10 Tf 48 787 Td (Network  |  Runner ? vCenter \(443\); Guest ? WSUS/Windows Update) Tj 0 -13 Td
+/F1 10 Tf 48 774 Td (GitHub  |  Repository + self-hosted runner + secrets) Tj 0 -13 Td
+/F1 10 Tf 48 761 Td (Accounts  |  vCenter service account + guest local admin) Tj 0 -13 Td
+/F1 10 Tf 48 748 Td () Tj 0 -13 Td
+/F1 10 Tf 48 735 Td () Tj 0 -13 Td
+/F1 10 Tf 48 722 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 709 Td () Tj 0 -13 Td
+/F2 11 Tf 48 696 Td (11. Support and Repository Links) Tj 0 -13 Td
+/F1 10 Tf 48 683 Td () Tj 0 -13 Td
+/F1 10 Tf 48 670 Td (- Repository: https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework) Tj 0 -13 Td
+/F1 10 Tf 48 657 Td (- Source framework: suryavamsi3/EMS-Github-Master-Repo \(Windows-Patch-Automation-Framework\)) Tj 0 -13 Td
+/F1 10 Tf 48 644 Td (- Key scripts:) Tj 0 -13 Td
+/F1 10 Tf 48 631 Td (- scripts/Invoke-WindowsPatchAutomation.ps1) Tj 0 -13 Td
+/F1 10 Tf 48 618 Td (- scripts/Guest/Invoke-WindowsUpdate.ps1) Tj 0 -13 Td
+/F1 10 Tf 48 605 Td (- scripts/Modules/VCenter.GuestOps.psm1) Tj 0 -13 Td
+/F1 10 Tf 48 592 Td () Tj 0 -13 Td
+/F1 10 Tf 48 579 Td () Tj 0 -13 Td
+/F1 10 Tf 48 566 Td (======================================================================) Tj 0 -13 Td
+/F1 10 Tf 48 553 Td () Tj 0 -13 Td
+/F1 10 Tf 48 540 Td (*End of manual*) Tj 0 -13 Td
+ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 19 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R] /Count 8 >>
+endobj
+20 0 obj
+<< /Type /Catalog /Pages 19 0 R >>
+endobj
+xref
+0 21
+0000000000 65535 f 
+0000000008 00000 n 
+0000000078 00000 n 
+0000000153 00000 n 
+0000003942 00000 n 
+0000004079 00000 n 
+0000007648 00000 n 
+0000007785 00000 n 
+0000011226 00000 n 
+0000011363 00000 n 
+0000015473 00000 n 
+0000015611 00000 n 
+0000019316 00000 n 
+0000019455 00000 n 
+0000023031 00000 n 
+0000023170 00000 n 
+0000026893 00000 n 
+0000027032 00000 n 
+0000028537 00000 n 
+0000028676 00000 n 
+0000028781 00000 n 
+trailer
+<< /Size 21 /Root 20 0 R >>
+startxref
+28832
+%%EOF

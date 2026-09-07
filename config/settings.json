@@ -1,11 +1,11 @@
 {
-  "vCenterServer": "vcenter.example.com",
-  "ignoreInvalidCertificate": false,
+  "vCenterServer": "blr-vsphere-01.strykercorp.com",
+  "ignoreInvalidCertificate": true,
   "guestWorkingDirectory": "C:\\ProgramData\\EnterprisePatchAutomation",
   "windowsUpdateSearchCriteria": "IsInstalled=0 and IsHidden=0",
   "autoRebootWhenRequired": true,
   "maxPatchCycles": 5,
-  "throttleLimit": 4,
+  "throttleLimit": 2,
   "pollIntervalSeconds": 15,
   "timeouts": {
     "webOperationSeconds": 300,
