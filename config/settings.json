@@ -1,0 +1,20 @@
+{
+  "vCenterServer": "vcenter.example.com",
+  "ignoreInvalidCertificate": false,
+  "guestWorkingDirectory": "C:\\ProgramData\\EnterprisePatchAutomation",
+  "windowsUpdateSearchCriteria": "IsInstalled=0 and IsHidden=0",
+  "autoRebootWhenRequired": true,
+  "maxPatchCycles": 5,
+  "throttleLimit": 4,
+  "pollIntervalSeconds": 15,
+  "timeouts": {
+    "webOperationSeconds": 300,
+    "toolsReadySeconds": 900,
+    "patchCycleSeconds": 7200,
+    "rebootSeconds": 1800
+  },
+  "retry": {
+    "maxAttempts": 3,
+    "initialDelaySeconds": 10
+  }
+}

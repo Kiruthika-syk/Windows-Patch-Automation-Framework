@@ -1,0 +1,2 @@
+VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow
+example-windows-vm-01,false,,Production,Infrastructure,Sunday-0200-UTC

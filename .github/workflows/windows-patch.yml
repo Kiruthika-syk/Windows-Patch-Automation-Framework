@@ -1,0 +1,75 @@
+name: Windows Patch Automation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Coordinate this schedule with the maintenance windows in config/vms.csv.
+    - cron: '0 2 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-patch-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate framework
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
+
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          $result = Invoke-Pester -Path ./tests -CI -Output Detailed -PassThru
+          if ($result.FailedCount -gt 0) { throw "$($result.FailedCount) test(s) failed." }
+
+  patch:
+    name: Patch Windows fleet
+    needs: validate
+    # A controlled runner with network access to vCenter is mandatory.
+    runs-on: [self-hosted, windows, vcenter]
+    environment: windows-patching
+    timeout-minutes: 720
+    env:
+      VCENTER_USERNAME: ${{ secrets.VCENTER_USERNAME }}
+      VCENTER_PASSWORD: ${{ secrets.VCENTER_PASSWORD }}
+      WINDOWS_GUEST_USERNAME: ${{ secrets.WINDOWS_GUEST_USERNAME }}
+      WINDOWS_GUEST_PASSWORD: ${{ secrets.WINDOWS_GUEST_PASSWORD }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned VMware PowerCLI
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module VMware.PowerCLI -RequiredVersion 13.3.0.24145081 -Scope CurrentUser -Force
+
+      - name: Run patch automation
+        shell: pwsh
+        run: |
+          ./scripts/Invoke-WindowsPatchAutomation.ps1 `
+            -SettingsPath ./config/settings.json `
+            -InventoryPath ./config/vms.csv `
+            -OutputDirectory ./output `
+            -FailOnNonCompliance
+
+      - name: Upload compliance reports and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-patch-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 30

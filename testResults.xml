@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="16" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-09-07" time="12:57:43">
+  <environment cwd="/home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework" machine-name="blr-kiruthika.strykercorp.com" user="root" os-version="5.14.0-570.51.1.el9_6.x86_64" nunit-version="2.5.8.0" clr-version="9.0.8" platform="Linux" user-domain="" />
+  <culture-info current-culture="en-IN" current-uiculture="en-IN" />
+  <test-suite type="TestFixture" name="Pester" executed="True" result="Success" success="True" time="2.1451" asserts="0" description="Pester">
+    <results>
+      <test-suite type="TestFixture" name="/home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/tests/Framework.Common.Tests.ps1" executed="True" result="Success" success="True" time="1.9104" asserts="0" description="/home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/tests/Framework.Common.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="Framework configuration" executed="True" result="Success" success="True" time="0.322" asserts="0" description="Framework configuration">
+            <results>
+              <test-case description="returns only enabled inventory rows" name="Framework configuration.returns only enabled inventory rows" time="0.1559" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="rejects duplicate enabled VM names" name="Framework configuration.rejects duplicate enabled VM names" time="0.0546" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="rejects an inventory with no enabled VMs" name="Framework configuration.rejects an inventory with no enabled VMs" time="0.0715" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Framework settings validation" executed="True" result="Success" success="True" time="0.3617" asserts="0" description="Framework settings validation">
+            <results>
+              <test-case description="accepts bounded production settings" name="Framework settings validation.accepts bounded production settings" time="0.0261" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="rejects an unsafe throttle" name="Framework settings validation.rejects an unsafe throttle" time="0.0087" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Retry behavior" executed="True" result="Success" success="True" time="1.4147" asserts="0" description="Retry behavior">
+            <results>
+              <test-case description="returns after a transient failure" name="Retry behavior.returns after a transient failure" time="1.0383" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="throws a bounded final error" name="Retry behavior.throws a bounded final error" time="0.0099" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Compliance reporting" executed="True" result="Success" success="True" time="1.5007" asserts="0" description="Compliance reporting">
+            <results>
+              <test-case description="generates JSON CSV and HTML reports" name="Compliance reporting.generates JSON CSV and HTML reports" time="0.0698" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+      <test-suite type="TestFixture" name="/home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/tests/Static.Tests.ps1" executed="True" result="Success" success="True" time="0.2347" asserts="0" description="/home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/tests/Static.Tests.ps1">
+        <results>
+          <test-suite type="TestFixture" name="PowerShell source" executed="True" result="Success" success="True" time="0.1461" asserts="0" description="PowerShell source">
+            <results>
+              <test-case description="uses only VMware Guest Operations for guest interaction" name="PowerShell source.uses only VMware Guest Operations for guest interaction" time="0.0232" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="uses native Windows Update COM interfaces" name="PowerShell source.uses native Windows Update COM interfaces" time="0.0124" asserts="0" success="True" result="Success" executed="True" />
+              <test-suite type="ParameterizedTest" name="PowerShell source.&lt;Name&gt; parses without syntax errors" executed="True" result="Success" success="True" time="0.1035" asserts="0" description="&lt;Name&gt; parses without syntax errors">
+                <results>
+                  <test-case description=" parses without syntax errors" name="PowerShell source. parses without syntax errors" time="0.0386" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description=" parses without syntax errors" name="PowerShell source. parses without syntax errors" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description=" parses without syntax errors" name="PowerShell source. parses without syntax errors" time="0.0098" asserts="0" success="True" result="Success" executed="True" />
+                  <test-case description=" parses without syntax errors" name="PowerShell source. parses without syntax errors" time="0.0454" asserts="0" success="True" result="Success" executed="True" />
+                </results>
+              </test-suite>
+            </results>
+          </test-suite>
+          <test-suite type="TestFixture" name="Configuration and workflow" executed="True" result="Success" success="True" time="0.1957" asserts="0" description="Configuration and workflow">
+            <results>
+              <test-case description="contains valid JSON settings with bounded safety controls" name="Configuration and workflow.contains valid JSON settings with bounded safety controls" time="0.0267" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="injects credentials exclusively from GitHub secrets" name="Configuration and workflow.injects credentials exclusively from GitHub secrets" time="0.0173" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>
