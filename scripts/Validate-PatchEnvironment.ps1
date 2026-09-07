@@ -3,12 +3,11 @@
 .SYNOPSIS
 Validates patch configuration and tests vCenter connectivity for all configured sites.
 
-.DESCRIPTION
-Read-only checks:
-- settings.json and vms.csv structure
-- vCenter connectivity for BLR, FW, and STC
-- VM inventory resolution (exact vCenter name, power state, VMware Tools)
-Does not install updates unless -ExecutePatch is passed.
+.NOTES
+Uses TWO separate credential sets from the environment:
+- VCENTER_USERNAME / VCENTER_PASSWORD  -> vCenter SSO (e.g. user@strykercorp.com)
+- WINDOWS_GUEST_USERNAME / WINDOWS_GUEST_PASSWORD -> Windows local admin inside each VM (e.g. Administrator)
+Do not enter Windows RDP credentials when PowerCLI asks for vCenter login.
 #>
 [CmdletBinding()]
 param(
@@ -37,13 +36,16 @@ Assert-FrameworkSettings -Settings $settings
 
 $vCenterUser = Get-RequiredEnvironmentVariable -Name 'VCENTER_USERNAME'
 $vCenterPassword = Get-RequiredEnvironmentVariable -Name 'VCENTER_PASSWORD'
+$guestUser = Get-RequiredEnvironmentVariable -Name 'WINDOWS_GUEST_USERNAME'
+$guestPassword = Get-RequiredEnvironmentVariable -Name 'WINDOWS_GUEST_PASSWORD'
+
 $vCenterCredential = [pscredential]::new($vCenterUser, (ConvertTo-SecureString $vCenterPassword -AsPlainText -Force))
+$guestCredential = [pscredential]::new($guestUser, (ConvertTo-SecureString $guestPassword -AsPlainText -Force))
 $vCenterPassword = $null
+$guestPassword = $null
 [GC]::Collect()
 
 $siteConfig = Get-Content -LiteralPath $VCentersPath -Raw | ConvertFrom-Json -Depth 10
-$allServers = @($siteConfig.sites | ForEach-Object { $_.server } | Sort-Object -Unique)
-
 $inventoryRows = @(Import-Csv -LiteralPath $InventoryPath)
 $rowsToCheck = if ($ResolveAllInventory) {
     @($inventoryRows)
@@ -52,19 +54,39 @@ else {
     @($inventoryRows | Where-Object { $_.Enabled -match '^(?i:true|yes|1)$' })
 }
 
+function Get-InventoryVCenter {
+    param($Row)
+    if (-not [string]::IsNullOrWhiteSpace($Row.VCenterServer)) {
+        return $Row.VCenterServer.Trim()
+    }
+    return [string]$settings.vCenterServer
+}
+
+$serversToConnect = if ($ResolveAllInventory) {
+    @($siteConfig.sites | ForEach-Object { $_.server } | Sort-Object -Unique)
+}
+else {
+    @($rowsToCheck | ForEach-Object { Get-InventoryVCenter -Row $_ } | Sort-Object -Unique)
+}
+
 Write-Host '=== Windows Patch Environment Validation ===' -ForegroundColor Cyan
-Write-Host "Configured vCenters: $($allServers -join ', ')"
+Write-Host "vCenter account: $vCenterUser"
+Write-Host "Windows guest account: $guestUser"
+Write-Host "vCenters to connect: $($serversToConnect -join ', ')"
 Write-Host "Inventory rows to validate: $($rowsToCheck.Count)"
+Write-Host ''
+Write-Host 'NOTE: vCenter and Windows guest credentials are different.' -ForegroundColor Yellow
+Write-Host '      RDP Administrator password is NOT the same as vCenter SSO unless you configured it that way.' -ForegroundColor Yellow
 
 $connectionResults = @()
-foreach ($server in $allServers) {
-    Write-Host "`nConnecting to $server..." -ForegroundColor Yellow
+foreach ($server in $serversToConnect) {
+    Write-Host "`nConnecting to vCenter $server..." -ForegroundColor Yellow
     try {
         $vi = Connect-PatchVCenter -Server $server -Credential $vCenterCredential `
             -IgnoreInvalidCertificate ([bool]$settings.ignoreInvalidCertificate) `
             -WebOperationTimeoutSeconds ([int]$settings.timeouts.webOperationSeconds)
         $vmCount = (Get-VM -Server $vi | Measure-Object).Count
-        Write-Host "  Connected. Visible VMs: $vmCount" -ForegroundColor Green
+        Write-Host "  vCenter connected. Visible VMs: $vmCount" -ForegroundColor Green
         $connectionResults += [pscustomobject]@{
             VCenter = $server
             Status = 'Connected'
@@ -73,7 +95,7 @@ foreach ($server in $allServers) {
         }
     }
     catch {
-        Write-Host "  FAILED: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  vCenter FAILED: $($_.Exception.Message)" -ForegroundColor Red
         $connectionResults += [pscustomobject]@{
             VCenter = $server
             Status = 'Failed'
@@ -86,27 +108,20 @@ foreach ($server in $allServers) {
 $vmResults = @()
 foreach ($row in $rowsToCheck) {
     $vmName = $row.VMName.Trim()
-    $server = if (-not [string]::IsNullOrWhiteSpace($row.VCenterServer)) {
-        $row.VCenterServer.Trim()
-    }
-    else {
-        [string]$settings.vCenterServer
-    }
+    $server = Get-InventoryVCenter -Row $row
 
     Write-Host "`nChecking VM '$vmName' on $server..." -ForegroundColor Yellow
     try {
-        $vi = Get-VIServer -Server $server -ErrorAction Stop
-        if (-not $vi) {
-            $vi = Connect-PatchVCenter -Server $server -Credential $vCenterCredential `
-                -IgnoreInvalidCertificate ([bool]$settings.ignoreInvalidCertificate) `
-                -WebOperationTimeoutSeconds ([int]$settings.timeouts.webOperationSeconds)
-        }
+        $vi = Get-PatchVCenterSession -Server $server
         $vm = Get-UniquePatchVM -VMName $vmName -Server $vi
         $tools = $vm.ExtensionData.Guest.ToolsRunningStatus
         $guestState = $vm.ExtensionData.Guest.GuestState
         $guestIp = ($vm.ExtensionData.Guest.IpAddress -join ', ')
         $ready = Test-VMToolsReady -VM $vm -Server $vi
-        Write-Host "  Found. PowerState=$($vm.PowerState) Tools=$tools GuestState=$guestState IP=$guestIp Ready=$ready" -ForegroundColor Green
+
+        Write-Host '  Testing Windows guest credentials via Guest Operations...' -ForegroundColor Yellow
+        $guestHost = Test-GuestCredential -VM $vm -GuestCredential $guestCredential
+        Write-Host "  VM found. PowerState=$($vm.PowerState) Tools=$tools GuestState=$guestState IP=$guestIp GuestHost=$guestHost Ready=$ready" -ForegroundColor Green
         $vmResults += [pscustomobject]@{
             VMName = $vmName
             VCenter = $server
@@ -115,6 +130,7 @@ foreach ($row in $rowsToCheck) {
             ToolsStatus = [string]$tools
             GuestState = [string]$guestState
             GuestIP = $guestIp
+            GuestHost = $guestHost
             ToolsReady = $ready
             Enabled = $row.Enabled
             Error = ''
@@ -130,6 +146,7 @@ foreach ($row in $rowsToCheck) {
             ToolsStatus = ''
             GuestState = ''
             GuestIP = ''
+            GuestHost = ''
             ToolsReady = $false
             Enabled = $row.Enabled
             Error = $_.Exception.Message
@@ -148,7 +165,7 @@ if ($vmResults.Count -gt 0) {
 Write-Host "`n=== Summary ===" -ForegroundColor Cyan
 $connectionResults | Format-Table -AutoSize
 if ($vmResults.Count -gt 0) {
-    $vmResults | Format-Table VMName, VCenter, Status, PowerState, ToolsStatus, ToolsReady, Enabled -AutoSize
+    $vmResults | Format-Table VMName, VCenter, Status, PowerState, ToolsStatus, GuestHost, ToolsReady, Enabled -AutoSize
 }
 
 $failedConnections = @($connectionResults | Where-Object Status -ne 'Connected').Count
@@ -165,6 +182,7 @@ if ($ExecutePatch) {
     if ($rowsToCheck.Count -eq 0) {
         throw 'Cannot execute patch run with zero enabled VMs.'
     }
+    Write-Host "`n=== Starting patch run ===" -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot 'Invoke-WindowsPatchAutomation.ps1') `
         -SettingsPath $SettingsPath `
         -InventoryPath $InventoryPath `

@@ -1,5 +1,22 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:PatchVCenterSessions = @{}
+$script:PowerCLIInitialized = $false
+
+function Initialize-PowerCLISession {
+    [CmdletBinding()]
+    param(
+        [bool]$IgnoreInvalidCertificate,
+        [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300
+    )
+
+    if ($script:PowerCLIInitialized) { return }
+
+    $certificateAction = if ($IgnoreInvalidCertificate) { 'Ignore' } else { 'Fail' }
+    Set-PowerCLIConfiguration -Scope Session -ParticipateInCEIP:$false -InvalidCertificateAction $certificateAction `
+        -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds -Confirm:$false | Out-Null
+    $script:PowerCLIInitialized = $true
+}
 
 function Connect-PatchVCenter {
     [CmdletBinding()]
@@ -10,10 +27,54 @@ function Connect-PatchVCenter {
         [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300
     )
 
-    $certificateAction = if ($IgnoreInvalidCertificate) { 'Ignore' } else { 'Fail' }
-    Set-PowerCLIConfiguration -Scope Session -ParticipateInCEIP:$false -InvalidCertificateAction $certificateAction `
-        -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds -Confirm:$false | Out-Null
-    Connect-VIServer -Server $Server -Credential $Credential -Force -ErrorAction Stop
+    Initialize-PowerCLISession -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+        -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds
+
+    $sessionKey = $Server.ToLowerInvariant()
+    if ($script:PatchVCenterSessions.ContainsKey($sessionKey)) {
+        return $script:PatchVCenterSessions[$sessionKey]
+    }
+
+    $session = Connect-VIServer -Server $Server -Credential $Credential -Force -ErrorAction Stop
+    $script:PatchVCenterSessions[$sessionKey] = $session
+    $script:PatchVCenterSessions[$session.Name.ToLowerInvariant()] = $session
+    $session
+}
+
+function Get-PatchVCenterSession {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Server
+    )
+
+    $sessionKey = $Server.ToLowerInvariant()
+    if ($script:PatchVCenterSessions.ContainsKey($sessionKey)) {
+        return $script:PatchVCenterSessions[$sessionKey]
+    }
+
+    $connected = @(Get-VIServer -ErrorAction SilentlyContinue | Where-Object {
+            $_.Name.ToLowerInvariant() -eq $sessionKey -or $_.Name.ToLowerInvariant() -like "*$($sessionKey.Split('.')[0])*"
+        })
+    if ($connected.Count -eq 1) {
+        return $connected[0]
+    }
+
+    throw "No active vCenter session for '$Server'. Connect with Connect-PatchVCenter first; do not enter Windows guest credentials at a vCenter login prompt."
+}
+
+function Test-GuestCredential {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential
+    )
+
+    $result = Invoke-VMScript -VM $VM -GuestCredential $GuestCredential -ScriptType PowerShell `
+        -ScriptText 'Write-Output $env:COMPUTERNAME' -ErrorAction Stop
+    if ($result.ExitCode -ne 0) {
+        throw "Guest credential test failed with exit code $($result.ExitCode): $($result.ScriptOutput)"
+    }
+    [string]($result.ScriptOutput).Trim()
 }
 
 function Get-UniquePatchVM {
@@ -238,7 +299,8 @@ function Restart-PatchVMGuest {
     Wait-VMToolsReady -VM $VM -Server $Server -TimeoutSeconds $TimeoutSeconds -PollSeconds $PollSeconds -RequireObservedNotReady
 }
 
-Export-ModuleMember -Function Connect-PatchVCenter, Get-UniquePatchVM, Test-VMToolsReady,
+Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
+    Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
     Wait-VMToolsReady, Invoke-GuestPowerShell, Initialize-GuestPatchWorkspace,
     Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
     Copy-GuestPatchArtifacts, Restart-PatchVMGuest
