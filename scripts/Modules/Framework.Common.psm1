@@ -147,7 +147,7 @@ function Assert-FrameworkSettings {
         throw 'pollIntervalSeconds must be between 5 and 300.'
     }
 
-    foreach ($name in 'webOperationSeconds', 'toolsReadySeconds', 'patchCycleSeconds', 'rebootSeconds') {
+    foreach ($name in 'webOperationSeconds', 'toolsReadySeconds', 'patchCycleSeconds', 'repairCycleSeconds', 'rebootSeconds') {
         if ($Settings.timeouts.PSObject.Properties.Name -notcontains $name -or [int]$Settings.timeouts.$name -le 0) {
             throw "Timeout '$name' must be present and greater than zero."
         }

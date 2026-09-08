@@ -23,6 +23,7 @@ $ProgressPreference = 'SilentlyContinue'
 $commonModule = Join-Path $PSScriptRoot 'Modules/Framework.Common.psm1'
 $guestOpsModule = Join-Path $PSScriptRoot 'Modules/VCenter.GuestOps.psm1'
 $guestPatchScript = Join-Path $PSScriptRoot 'Guest/Invoke-WindowsUpdate.ps1'
+$guestRepairScript = Join-Path $PSScriptRoot 'Guest/Repair-WindowsUpdateAgent.ps1'
 Import-Module $commonModule -Force
 
 if (-not (Get-Module -ListAvailable -Name VMware.PowerCLI)) {
@@ -30,6 +31,9 @@ if (-not (Get-Module -ListAvailable -Name VMware.PowerCLI)) {
 }
 if (-not (Test-Path -LiteralPath $guestPatchScript -PathType Leaf)) {
     throw "Guest patch script not found: $guestPatchScript"
+}
+if (-not (Test-Path -LiteralPath $guestRepairScript -PathType Leaf)) {
+    throw "Guest repair script not found: $guestRepairScript"
 }
 
 $configuration = Import-FrameworkConfiguration -SettingsPath $SettingsPath -InventoryPath $InventoryPath
@@ -69,6 +73,7 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
     $workerSettings = $using:settings
     $workerVCenterCredential = $using:vCenterCredential
     $workerGuestCredential = $using:guestCredential
+    $guestRepairScript = $using:guestRepairScript
     $vmName = $row.VMName.Trim()
     $inventoryIp = if ($row.PSObject.Properties.Name -contains 'IPAddress') { [string]$row.IPAddress.Trim() } else { '' }
     $safeVMName = $vmName -replace '[^\w.-]', '_'
@@ -133,12 +138,52 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
         $stage = 'StageGuestScript'
         $guestDirectory = $workerSettings.guestWorkingDirectory
         $guestScriptPath = "$($guestDirectory.TrimEnd('\', '/'))\Invoke-WindowsUpdate.ps1"
+        $guestRepairScriptPath = "$($guestDirectory.TrimEnd('\', '/'))\Repair-WindowsUpdateAgent.ps1"
         Invoke-WithRetry -Operation {
             Initialize-GuestPatchWorkspace -VM $vm -GuestCredential $workerGuestCredential -GuestWorkingDirectory $guestDirectory
             Copy-PatchScriptToGuest -VM $vm -GuestCredential $workerGuestCredential `
                 -Source $using:guestPatchScript -Destination $guestScriptPath
-        } -OperationName 'Stage guest patch script' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+            Copy-PatchScriptToGuest -VM $vm -GuestCredential $workerGuestCredential `
+                -Source $using:guestRepairScript -Destination $guestRepairScriptPath
+        } -OperationName 'Stage guest patch scripts' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
             -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+
+        $stage = 'RepairWindowsUpdate'
+        Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+            -Message 'Running deep Windows Update Agent repair (DISM/SFC) before patching.'
+        $repairResult = Invoke-WithRetry -Operation {
+            Invoke-GuestWindowsUpdateRepair -VM $vm -GuestCredential $workerGuestCredential `
+                -GuestScriptPath $guestRepairScriptPath -GuestWorkingDirectory $guestDirectory `
+                -LocalDirectory $localVMDirectory -Server $server -VCenterCredential $workerVCenterCredential `
+                -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
+                -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
+                -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
+                -PollSeconds ([int]$workerSettings.pollIntervalSeconds) -DeepRepair
+        } -OperationName 'Repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+            -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+        Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+            -Message 'Windows Update repair completed.' -Data @{
+                status = [string]$repairResult.status
+                comAvailable = [bool]$repairResult.comAvailable
+                deepRepairApplied = [bool]$repairResult.deepRepairApplied
+                rebootRequired = [bool]$repairResult.rebootRequired
+            }
+        if ([string]$repairResult.status -eq 'Failed') {
+            $repairError = if ($repairResult.error) { $repairResult.error.message } else { 'Unknown repair error.' }
+            throw "Windows Update repair failed: $repairError"
+        }
+        if ([string]$repairResult.status -eq 'RebootRequired' -or [bool]$repairResult.rebootRequired) {
+            if (-not [bool]$workerSettings.autoRebootWhenRequired) {
+                throw "Windows Update repair requires a reboot but autoRebootWhenRequired is disabled for '$vmName'."
+            }
+            $stage = 'Reboot'
+            $reboots++
+            Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+                -Message 'Restarting guest after Windows Update repair.'
+            Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
+                -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
+                -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+        }
 
         for ($cycle = 1; $cycle -le [int]$workerSettings.maxPatchCycles; $cycle++) {
             $cycles = $cycle
@@ -154,6 +199,9 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                 -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
 
             Wait-GuestPatchCycle -VM $vm -GuestCredential $workerGuestCredential -CycleHandle $cycleHandle `
+                -Server $server -VCenterCredential $workerVCenterCredential `
+                -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
+                -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
                 -TimeoutSeconds ([int]$workerSettings.timeouts.patchCycleSeconds) `
                 -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
 
@@ -176,6 +224,24 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
 
             if ($cycleResult.status -eq 'Failed') {
                 $guestError = if ($cycleResult.error) { $cycleResult.error.message } else { 'Unknown guest patch error.' }
+                $guestErrorId = if ($cycleResult.error) { [string]$cycleResult.error.fullyQualifiedErrorId } else { '' }
+                $isComFailure = ($guestError + ' ' + $guestErrorId) -match '(?i)800703fa|8007041d|80040154|Microsoft\.Update\.(Session|SystemInfo)|COM class factory|marked for deletion|NoCOMClassIdentified|CimException|GetCimInstanceCommand'
+                if ($isComFailure) {
+                    if ($reboots -ge 2) {
+                        throw "Windows Update COM failure persisted after $($reboots) remediation reboot(s) for '$vmName'."
+                    }
+                    if (-not [bool]$workerSettings.autoRebootWhenRequired) {
+                        throw "Windows Update COM failure requires remediation reboot but autoRebootWhenRequired is disabled for '$vmName'."
+                    }
+                    $stage = 'Remediation'
+                    Write-StructuredLog -Path $vmLog -Level Warning -Stage $stage -VMName $vmName `
+                        -Message 'Windows Update COM failure detected; rebooting guest to complete agent remediation.'
+                    Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
+                        -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
+                        -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+                    $reboots++
+                    continue
+                }
                 throw "Guest patch cycle failed: $guestError"
             }
             if ($cycleResult.status -eq 'NoUpdates') {

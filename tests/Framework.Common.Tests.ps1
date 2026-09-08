@@ -58,6 +58,7 @@ Describe 'Framework settings validation' {
                 webOperationSeconds = 300
                 toolsReadySeconds = 900
                 patchCycleSeconds = 7200
+                repairCycleSeconds = 7200
                 rebootSeconds = 1800
             }
             retry = [pscustomobject]@{ maxAttempts = 3; initialDelaySeconds = 10 }

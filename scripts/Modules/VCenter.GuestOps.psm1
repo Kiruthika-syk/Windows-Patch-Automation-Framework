@@ -249,12 +249,34 @@ Write-Output `$process.Id
     }
 }
 
+function Repair-PatchVCenterSession {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Server,
+        [Parameter(Mandatory)][pscredential]$Credential,
+        [bool]$IgnoreInvalidCertificate,
+        [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300
+    )
+
+    try {
+        Connect-PatchVCenter -Server $Server -Credential $Credential -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+            -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds | Out-Null
+    }
+    catch {
+        # Best-effort reconnect during long-running guest polling.
+    }
+}
+
 function Wait-GuestPatchCycle {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$VM,
         [Parameter(Mandatory)][pscredential]$GuestCredential,
         [Parameter(Mandatory)]$CycleHandle,
+        [string]$Server,
+        [pscredential]$VCenterCredential,
+        [bool]$IgnoreInvalidCertificate,
+        [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300,
         [ValidateRange(60, 28800)][int]$TimeoutSeconds = 7200,
         [ValidateRange(5, 300)][int]$PollSeconds = 20
     )
@@ -279,6 +301,11 @@ else { 'EXITED' }
         catch {
             if ($_.Exception.Message -match 'exited without producing') { throw }
             $lastPollError = $_.Exception.Message
+            if ($Server -and $VCenterCredential -and $_.Exception.Message -match 'connection|timed out|not authenticated|required by the current operation') {
+                Repair-PatchVCenterSession -Server $Server -Credential $VCenterCredential `
+                    -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+                    -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds
+            }
         }
         Start-Sleep -Seconds $PollSeconds
     } while ([DateTime]::UtcNow -lt $deadline)
@@ -290,6 +317,143 @@ else { 'EXITED' }
     catch { }
     $detail = if ($lastPollError) { " Last polling error: $lastPollError" } else { '' }
     throw "Windows Update cycle exceeded the $TimeoutSeconds second timeout.$detail"
+}
+
+function Start-GuestRepairJob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)][string]$GuestScriptPath,
+        [Parameter(Mandatory)][string]$GuestWorkingDirectory,
+        [switch]$DeepRepair
+    )
+
+    $guestRoot = $GuestWorkingDirectory.TrimEnd('\', '/')
+    $resultPath = "$guestRoot\repair-result.json"
+    $logPath = "$guestRoot\repair-log.jsonl"
+    $pidPath = "$guestRoot\repair.pid"
+    $escapedScript = $GuestScriptPath.Replace("'", "''")
+    $escapedResult = $resultPath.Replace("'", "''")
+    $escapedLog = $logPath.Replace("'", "''")
+    $escapedPid = $pidPath.Replace("'", "''")
+    $deepRepairFlag = if ($DeepRepair) { '-DeepRepair' } else { '' }
+    $repairCommand = "& '$escapedScript' -ResultPath '$escapedResult' -LogPath '$escapedLog' $deepRepairFlag"
+    $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($repairCommand))
+
+    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+`$ErrorActionPreference = 'Stop'
+Remove-Item -LiteralPath '$escapedResult', '$escapedLog', '$escapedPid' -Force -ErrorAction SilentlyContinue
+`$arguments = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','$encodedCommand')
+`$process = Start-Process -FilePath "`$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList `$arguments -WindowStyle Hidden -PassThru
+Set-Content -LiteralPath '$escapedPid' -Value `$process.Id -Encoding ascii
+Write-Output `$process.Id
+"@
+
+    [pscustomobject]@{
+        ProcessId = [int]($output.Trim() -split '\s+')[-1]
+        ResultPath = $resultPath
+        LogPath = $logPath
+        PidPath = $pidPath
+    }
+}
+
+function Wait-GuestRepairJob {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)]$RepairHandle,
+        [string]$Server,
+        [pscredential]$VCenterCredential,
+        [bool]$IgnoreInvalidCertificate,
+        [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300,
+        [ValidateRange(60, 28800)][int]$TimeoutSeconds = 7200,
+        [ValidateRange(5, 300)][int]$PollSeconds = 20
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $escapedResult = $RepairHandle.ResultPath.Replace("'", "''")
+    $pid = $RepairHandle.ProcessId
+    $lastPollError = $null
+    do {
+        try {
+            $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+if (Test-Path -LiteralPath '$escapedResult' -PathType Leaf) { 'COMPLETE' }
+elseif (Get-Process -Id $pid -ErrorAction SilentlyContinue) { 'RUNNING' }
+else { 'EXITED' }
+"@
+            if ($output -match 'COMPLETE') { return }
+            if ($output -match 'EXITED') {
+                throw "Guest repair process $pid exited without producing a result file."
+            }
+            $lastPollError = $null
+        }
+        catch {
+            if ($_.Exception.Message -match 'exited without producing') { throw }
+            $lastPollError = $_.Exception.Message
+            if ($Server -and $VCenterCredential -and $_.Exception.Message -match 'connection|timed out|not authenticated|required by the current operation') {
+                Repair-PatchVCenterSession -Server $Server -Credential $VCenterCredential `
+                    -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+                    -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds
+            }
+        }
+        Start-Sleep -Seconds $PollSeconds
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    try {
+        Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText `
+            "Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue" | Out-Null
+    }
+    catch { }
+    $detail = if ($lastPollError) { " Last polling error: $lastPollError" } else { '' }
+    throw "Windows Update repair exceeded the $TimeoutSeconds second timeout.$detail"
+}
+
+function Copy-GuestRepairArtifacts {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)]$RepairHandle,
+        [Parameter(Mandatory)][string]$LocalDirectory
+    )
+
+    New-Item -ItemType Directory -Path $LocalDirectory -Force | Out-Null
+    $localResult = Join-Path $LocalDirectory 'repair-result.json'
+    $localLog = Join-Path $LocalDirectory 'repair-log.jsonl'
+    Copy-VMGuestFile -VM $VM -GuestCredential $GuestCredential -Source $RepairHandle.ResultPath `
+        -Destination $localResult -GuestToLocal -Force -ErrorAction Stop | Out-Null
+    Copy-VMGuestFile -VM $VM -GuestCredential $GuestCredential -Source $RepairHandle.LogPath `
+        -Destination $localLog -GuestToLocal -Force -ErrorAction Stop | Out-Null
+    Get-Content -LiteralPath $localResult -Raw | ConvertFrom-Json -Depth 20
+}
+
+function Invoke-GuestWindowsUpdateRepair {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)][string]$GuestScriptPath,
+        [Parameter(Mandatory)][string]$GuestWorkingDirectory,
+        [Parameter(Mandatory)][string]$LocalDirectory,
+        [Parameter(Mandatory)]$Server,
+        [Parameter(Mandatory)][pscredential]$VCenterCredential,
+        [bool]$IgnoreInvalidCertificate,
+        [ValidateRange(30, 3600)][int]$WebOperationTimeoutSeconds = 300,
+        [ValidateRange(60, 28800)][int]$TimeoutSeconds = 7200,
+        [ValidateRange(5, 300)][int]$PollSeconds = 20,
+        [switch]$DeepRepair
+    )
+
+    $repairHandle = Start-GuestRepairJob -VM $VM -GuestCredential $GuestCredential `
+        -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory -DeepRepair:$DeepRepair
+    Wait-GuestRepairJob -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
+        -Server $Server -VCenterCredential $VCenterCredential -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+        -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds -TimeoutSeconds $TimeoutSeconds `
+        -PollSeconds $PollSeconds
+    Copy-GuestRepairArtifacts -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
+        -LocalDirectory $LocalDirectory
 }
 
 function Copy-GuestPatchArtifacts {
@@ -333,7 +497,8 @@ function Restart-PatchVMGuest {
 }
 
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
-    Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
+    Repair-PatchVCenterSession, Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
     Wait-VMToolsReady, Invoke-GuestPowerShell, Initialize-GuestPatchWorkspace,
     Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
+    Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts, Invoke-GuestWindowsUpdateRepair,
     Copy-GuestPatchArtifacts, Restart-PatchVMGuest

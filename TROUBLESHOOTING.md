@@ -42,6 +42,23 @@ the VM's `orchestrator.jsonl` and latest guest cycle result/log.
 - Increase `timeouts.patchCycleSeconds` only after identifying normal long-running
   behavior. The orchestrator attempts to stop the timed-out process.
 
+## Windows Update COM failure (`0x800703FA` / `Microsoft.Update.Session`)
+
+Symptoms include `Illegal operation attempted on a registry key that has been marked
+for deletion` or `NoCOMClassIdentified` when creating the update COM objects.
+
+The guest patch script now performs automatic remediation:
+
+1. Stop `wuauserv`, `bits`, `cryptsvc`, and `msiserver`.
+2. Rename `C:\Windows\SoftwareDistribution` to a timestamped backup folder.
+3. Restart the update-related services and retry COM initialization.
+4. If COM is still unavailable, return `RebootRequired` so the orchestrator reboots
+   the guest and retries on the next cycle.
+
+If failures persist after an automated remediation reboot, inspect Windows Update,
+BITS, and Cryptographic Services manually on the guest and review servicing health
+with `DISM /Online /Cleanup-Image /ScanHealth`.
+
 ## Update download or installation failure
 
 The raw cycle result records operation result codes and HRESULT values. Decode

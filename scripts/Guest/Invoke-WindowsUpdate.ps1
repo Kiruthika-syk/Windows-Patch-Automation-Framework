@@ -57,6 +57,117 @@ function Get-OperationResultName {
     }
 }
 
+function Test-WindowsUpdateComError {
+    param(
+        [Parameter(Mandatory)]$ErrorRecord
+    )
+
+    $message = @(
+        $ErrorRecord.Exception.Message
+        $ErrorRecord.FullyQualifiedErrorId
+    ) -join ' '
+    return $message -match '(?i)800703fa|8007041d|80040154|80070005|Microsoft\.Update\.(Session|SystemInfo)|COM class factory|marked for deletion|NoCOMClassIdentified|CimException|GetCimInstanceCommand'
+}
+
+function Set-WindowsUpdateServiceState {
+    param(
+        [Parameter(Mandatory)][ValidateSet('Stop', 'Start')][string]$Action,
+        [string[]]$ServiceNames = @('wuauserv', 'bits', 'cryptsvc', 'msiserver')
+    )
+
+    foreach ($serviceName in $ServiceNames) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if (-not $service) { continue }
+        if ($Action -eq 'Stop' -and $service.Status -ne 'Stopped') {
+            Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+        }
+        if ($Action -eq 'Start' -and $service.Status -ne 'Running') {
+            Set-Service -Name $serviceName -StartupType Manual -ErrorAction SilentlyContinue
+            Start-Service -Name $serviceName -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Repair-WindowsUpdateAgent {
+    Write-GuestLog -Level Warning -Stage Remediation -Message 'Repairing Windows Update Agent after COM failure.'
+
+    Set-WindowsUpdateServiceState -Action Stop
+    Start-Sleep -Seconds 5
+
+    $distributionPath = Join-Path $env:SystemRoot 'SoftwareDistribution'
+    if (Test-Path -LiteralPath $distributionPath) {
+        $backupName = "SoftwareDistribution.old-$([DateTime]::UtcNow.ToString('yyyyMMddHHmmss'))"
+        $backupPath = Join-Path (Split-Path -Parent $distributionPath) $backupName
+        try {
+            Rename-Item -LiteralPath $distributionPath -NewName $backupName -ErrorAction Stop
+            Write-GuestLog -Level Information -Stage Remediation -Message 'Renamed SoftwareDistribution cache.' -Data @{
+                backupPath = $backupPath
+            }
+        }
+        catch {
+            Write-GuestLog -Level Warning -Stage Remediation -Message 'Could not rename SoftwareDistribution cache; continuing with service restart.' -Data @{
+                error = $_.Exception.Message
+            }
+        }
+    }
+
+    Set-WindowsUpdateServiceState -Action Start
+    Start-Sleep -Seconds 15
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+
+    Write-GuestLog -Level Information -Stage Remediation -Message 'Windows Update Agent remediation completed.'
+}
+
+function Initialize-WindowsUpdateEnvironment {
+    try {
+        $lastBoot = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
+        $bootAgeMinutes = (New-TimeSpan -Start $lastBoot -End (Get-Date)).TotalMinutes
+        if ($bootAgeMinutes -lt 20) {
+            Write-GuestLog -Level Information -Stage Initialize -Message 'Recent reboot detected; warming up Windows Update services.' -Data @{
+                bootAgeMinutes = [Math]::Round($bootAgeMinutes, 2)
+            }
+            Set-WindowsUpdateServiceState -Action Start
+            Start-Sleep -Seconds 45
+        }
+    }
+    catch {
+        if (Test-WindowsUpdateComError -ErrorRecord $_) {
+            Write-GuestLog -Level Warning -Stage Initialize -Message 'Skipped boot warm-up because the guest OS has pending registry deletion state.'
+            return
+        }
+        throw
+    }
+}
+
+function New-WindowsUpdateSession {
+    param(
+        [ValidateRange(1, 3)][int]$MaxAttempts = 2
+    )
+
+    $remediationApplied = $false
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            $updateSession = New-Object -ComObject Microsoft.Update.Session
+            $updateSession.ClientApplicationID = 'Enterprise Windows Patch Automation Framework'
+            $systemInformation = New-Object -ComObject Microsoft.Update.SystemInfo
+            return [pscustomobject]@{
+                Session = $updateSession
+                SystemInfo = $systemInformation
+                RemediationApplied = $remediationApplied
+            }
+        }
+        catch {
+            $isComError = Test-WindowsUpdateComError -ErrorRecord $_
+            if (-not $isComError -or $attempt -eq $MaxAttempts) { throw }
+            Repair-WindowsUpdateAgent
+            $remediationApplied = $true
+        }
+    }
+
+    throw 'Unable to create Windows Update COM session.'
+}
+
 $result = [ordered]@{
     schemaVersion = '1.0'
     computerName = $env:COMPUTERNAME
@@ -71,15 +182,40 @@ $result = [ordered]@{
     installedCount = 0
     failedCount = 0
     rebootRequired = $false
+    remediationApplied = $false
     updates = @()
     error = $null
 }
 
 try {
     Write-GuestLog -Level Information -Stage Initialize -Message 'Starting Windows Update cycle.'
-    $updateSession = New-Object -ComObject Microsoft.Update.Session
-    $updateSession.ClientApplicationID = 'Enterprise Windows Patch Automation Framework'
-    $systemInformation = New-Object -ComObject Microsoft.Update.SystemInfo
+    try {
+        Initialize-WindowsUpdateEnvironment
+    }
+    catch {
+        if (-not (Test-WindowsUpdateComError -ErrorRecord $_)) { throw }
+        Write-GuestLog -Level Warning -Stage Initialize -Message 'Initialize warm-up failed due to pending registry deletion; continuing with remediation-aware session startup.'
+    }
+
+    $sessionContext = $null
+    try {
+        $sessionContext = New-WindowsUpdateSession
+    }
+    catch {
+        if (Test-WindowsUpdateComError -ErrorRecord $_) {
+            Repair-WindowsUpdateAgent
+            $result.remediationApplied = $true
+            $result.rebootRequired = $true
+            $result.status = 'RebootRequired'
+            Write-GuestLog -Level Warning -Stage Remediation -Message 'Windows Update COM still unavailable after remediation; reboot is required before retrying.'
+            return
+        }
+        throw
+    }
+
+    $result.remediationApplied = [bool]$sessionContext.RemediationApplied
+    $updateSession = $sessionContext.Session
+    $systemInformation = $sessionContext.SystemInfo
 
     Write-GuestLog -Level Information -Stage Scan -Message 'Scanning Windows Update Agent.' -Data @{
         criteria = $SearchCriteria
