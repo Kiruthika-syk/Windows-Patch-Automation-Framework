@@ -1,6 +1,7 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:PatchVCenterSessions = @{}
+$script:PatchVMInventoryCache = @{}
 $script:PowerCLIInitialized = $false
 
 function Initialize-PowerCLISession {
@@ -77,16 +78,48 @@ function Test-GuestCredential {
     [string]($result.ScriptOutput).Trim()
 }
 
+function Get-PatchVMInventory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Server
+    )
+
+    $sessionKey = if ($Server -is [string]) { $Server.ToLowerInvariant() } else { $Server.Name.ToLowerInvariant() }
+    if ($script:PatchVMInventoryCache.ContainsKey($sessionKey)) {
+        return $script:PatchVMInventoryCache[$sessionKey]
+    }
+
+    $inventory = @(Get-VM -Server $Server)
+    $script:PatchVMInventoryCache[$sessionKey] = $inventory
+    $inventory
+}
+
 function Get-UniquePatchVM {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$VMName,
-        [Parameter(Mandatory)]$Server
+        [Parameter(Mandatory)]$Server,
+        [string]$IPAddress
     )
 
     $matches = @(Get-VM -Name $VMName -Server $Server -ErrorAction SilentlyContinue)
-    if ($matches.Count -eq 0) { throw "VM '$VMName' was not found in vCenter." }
-    if ($matches.Count -gt 1) { throw "VM name '$VMName' is ambiguous ($($matches.Count) matches)." }
+    if ($matches.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($IPAddress)) {
+        $targetIp = $IPAddress.Trim()
+        $matches = @(Get-PatchVMInventory -Server $Server | Where-Object {
+                @($_.ExtensionData.Guest.IpAddress | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -contains $targetIp
+            })
+    }
+
+    if ($matches.Count -eq 0) {
+        if (-not [string]::IsNullOrWhiteSpace($IPAddress)) {
+            throw "VM '$VMName' was not found in vCenter (also checked IP '$IPAddress')."
+        }
+        throw "VM '$VMName' was not found in vCenter."
+    }
+    if ($matches.Count -gt 1) {
+        $detail = if (-not [string]::IsNullOrWhiteSpace($IPAddress)) { " for name '$VMName' or IP '$IPAddress'" } else { " for name '$VMName'" }
+        throw "VM lookup$detail is ambiguous ($($matches.Count) matches)."
+    }
     $matches[0]
 }
 
@@ -300,7 +333,7 @@ function Restart-PatchVMGuest {
 }
 
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
-    Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
+    Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
     Wait-VMToolsReady, Invoke-GuestPowerShell, Initialize-GuestPatchWorkspace,
     Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
     Copy-GuestPatchArtifacts, Restart-PatchVMGuest

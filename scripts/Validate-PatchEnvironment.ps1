@@ -108,12 +108,17 @@ foreach ($server in $serversToConnect) {
 $vmResults = @()
 foreach ($row in $rowsToCheck) {
     $vmName = $row.VMName.Trim()
+    $inventoryIp = if ($row.PSObject.Properties.Name -contains 'IPAddress') { [string]$row.IPAddress } else { '' }
     $server = Get-InventoryVCenter -Row $row
 
     Write-Host "`nChecking VM '$vmName' on $server..." -ForegroundColor Yellow
     try {
         $vi = Get-PatchVCenterSession -Server $server
-        $vm = Get-UniquePatchVM -VMName $vmName -Server $vi
+        $vm = Get-UniquePatchVM -VMName $vmName -Server $vi -IPAddress $inventoryIp
+        $resolvedName = [string]$vm.Name
+        if ($resolvedName -ne $vmName) {
+            Write-Host "  Resolved inventory name '$vmName' to vCenter VM '$resolvedName' via IP $inventoryIp." -ForegroundColor Yellow
+        }
         $tools = $vm.ExtensionData.Guest.ToolsRunningStatus
         $guestState = $vm.ExtensionData.Guest.GuestState
         $guestIp = ($vm.ExtensionData.Guest.IpAddress -join ', ')
@@ -124,6 +129,7 @@ foreach ($row in $rowsToCheck) {
         Write-Host "  VM found. PowerState=$($vm.PowerState) Tools=$tools GuestState=$guestState IP=$guestIp GuestHost=$guestHost Ready=$ready" -ForegroundColor Green
         $vmResults += [pscustomobject]@{
             VMName = $vmName
+            ResolvedVMName = $resolvedName
             VCenter = $server
             Status = 'Found'
             PowerState = [string]$vm.PowerState
@@ -140,6 +146,7 @@ foreach ($row in $rowsToCheck) {
         Write-Host "  FAILED: $($_.Exception.Message)" -ForegroundColor Red
         $vmResults += [pscustomobject]@{
             VMName = $vmName
+            ResolvedVMName = ''
             VCenter = $server
             Status = 'Failed'
             PowerState = ''
@@ -165,7 +172,7 @@ if ($vmResults.Count -gt 0) {
 Write-Host "`n=== Summary ===" -ForegroundColor Cyan
 $connectionResults | Format-Table -AutoSize
 if ($vmResults.Count -gt 0) {
-    $vmResults | Format-Table VMName, VCenter, Status, PowerState, ToolsStatus, GuestHost, ToolsReady, Enabled -AutoSize
+    $vmResults | Format-Table VMName, ResolvedVMName, VCenter, Status, PowerState, ToolsStatus, GuestHost, ToolsReady, Enabled -AutoSize
 }
 
 $failedConnections = @($connectionResults | Where-Object Status -ne 'Connected').Count

@@ -1,6 +1,5 @@
 VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow,IPAddress,FQDN,Notes
 blr-122105 VMP,true,blr-vsphere-01.strykercorp.com,BLR,NEPTUNE,Sunday-0200-UTC,10.90.122.105,blr-122105vmp.vcraeng.com,Windows updated 03-03-2025
 blr-122106 VS,true,blr-vsphere-01.strykercorp.com,BLR,NEPTUNE,Sunday-0200-UTC,10.90.122.106,blr-122106vs.vcraeng.com,Windows updated 03-03-2025
-BLR-AA-VSIO,true,blr-vsphere-01.strykercorp.com,BLR,Test Engineering,Sunday-0200-UTC,10.90.105.180,blr-aa-vstg.vcraeng.com,Owner Mayuri Vaidya K V
-BLR-AARIF-VCC,true,blr-vsphere-01.strykercorp.com,BLR,Mobile Team,Sunday-0200-UTC,10.90.128.187,blr-aarif-vcg.vcraeng.com,Owner fazil tadavi - Testing
-BLR-AARIF-VMP,false,blr-vsphere-01.strykercorp.com,BLR,Mobile Team,Sunday-0200-UTC,10.90.128.188,blr-aarif-vmp.vcraeng.com,Owner fazil tadavi - Testing
+BLR-AA-VSTG,true,blr-vsphere-01.strykercorp.com,BLR,Test Engineering,Sunday-0200-UTC,10.90.105.180,blr-aa-vstg.vcraeng.com,Owner Mayuri Vaidya K V - VSTG Configuration
+BLR-AARIF-VCG,true,blr-vsphere-01.strykercorp.com,BLR,Mobile Team,Sunday-0200-UTC,10.90.128.187,blr-aarif-vcg.vcraeng.com,Owner Aarif tadavi - Testing

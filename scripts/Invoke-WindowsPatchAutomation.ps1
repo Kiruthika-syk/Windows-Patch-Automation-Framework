@@ -70,6 +70,7 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
     $workerVCenterCredential = $using:vCenterCredential
     $workerGuestCredential = $using:guestCredential
     $vmName = $row.VMName.Trim()
+    $inventoryIp = if ($row.PSObject.Properties.Name -contains 'IPAddress') { [string]$row.IPAddress.Trim() } else { '' }
     $safeVMName = $vmName -replace '[^\w.-]', '_'
     $localVMDirectory = Join-Path $using:vmLogsDirectory $safeVMName
     New-Item -ItemType Directory -Path $localVMDirectory -Force | Out-Null
@@ -116,7 +117,7 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
         $connected = $true
 
         $stage = 'ValidateVM'
-        $vm = Invoke-WithRetry -Operation { Get-UniquePatchVM -VMName $vmName -Server $viServer } -OperationName "Find VM '$vmName'" `
+        $vm = Invoke-WithRetry -Operation { Get-UniquePatchVM -VMName $vmName -Server $viServer -IPAddress $inventoryIp } -OperationName "Find VM '$vmName'" `
             -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
             -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
         if ($vm.PowerState -ne 'PoweredOn') {
