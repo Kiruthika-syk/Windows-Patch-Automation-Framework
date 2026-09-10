@@ -158,9 +158,23 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                 -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
                 -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
                 -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
-                -PollSeconds ([int]$workerSettings.pollIntervalSeconds) -DeepRepair
+                -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
         } -OperationName 'Repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
             -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+        if (-not [bool]$repairResult.comAvailable -and [string]$repairResult.status -ne 'Ready') {
+            Write-StructuredLog -Path $vmLog -Level Warning -Stage $stage -VMName $vmName `
+                -Message 'Basic repair did not restore Windows Update COM; running DISM/SFC deep repair.'
+            $repairResult = Invoke-WithRetry -Operation {
+                Invoke-GuestWindowsUpdateRepair -VM $vm -GuestCredential $workerGuestCredential `
+                    -GuestScriptPath $guestRepairScriptPath -GuestWorkingDirectory $guestDirectory `
+                    -LocalDirectory $localVMDirectory -Server $server -VCenterCredential $workerVCenterCredential `
+                    -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
+                    -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
+                    -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
+                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds) -DeepRepair
+            } -OperationName 'Deep repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+                -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+        }
         Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
             -Message 'Windows Update repair completed.' -Data @{
                 status = [string]$repairResult.status
@@ -182,7 +196,26 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                 -Message 'Restarting guest after Windows Update repair.'
             Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
                 -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
-                -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+                -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
+                -PostRebootWarmUpSeconds ([int]$workerSettings.postRebootWarmUpSeconds)
+        }
+
+        $postRebootWarmUpSeconds = [int]$workerSettings.postRebootWarmUpSeconds
+        $maxRebootOnlyCycles = [int]$workerSettings.maxRebootOnlyCycles
+        $consecutiveRebootOnlyCycles = 0
+
+        $testConvergence = {
+            param($Reason)
+            $convergence = Test-GuestPatchConvergence -VM $vm -GuestCredential $workerGuestCredential `
+                -SearchCriteria $workerSettings.windowsUpdateSearchCriteria
+            Write-StructuredLog -Path $vmLog -Level Information -Stage Convergence -VMName $vmName `
+                -Message $Reason -Data @{
+                    pendingUpdates = $convergence.PendingUpdates
+                    rebootRequired = $convergence.RebootRequired
+                    registryRebootPending = $convergence.RegistryRebootPending
+                    isCompliant = $convergence.IsCompliant
+                }
+            return $convergence
         }
 
         for ($cycle = 1; $cycle -le [int]$workerSettings.maxPatchCycles; $cycle++) {
@@ -238,7 +271,8 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                         -Message 'Windows Update COM failure detected; rebooting guest to complete agent remediation.'
                     Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
                         -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
-                        -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+                        -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
+                        -PostRebootWarmUpSeconds ([int]$workerSettings.postRebootWarmUpSeconds)
                     $reboots++
                     continue
                 }
@@ -249,7 +283,26 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                 $completedConvergence = $true
                 break
             }
-            if ($cycleResult.status -eq 'RebootRequired' -or [bool]$cycleResult.rebootRequired) {
+
+            $needsReboot = ($cycleResult.status -eq 'RebootRequired' -or [bool]$cycleResult.rebootRequired)
+            $isRebootOnlyCycle = ($needsReboot -and [int]$cycleResult.applicableCount -eq 0 -and [int]$cycleResult.installedCount -eq 0)
+            if ($isRebootOnlyCycle) {
+                $consecutiveRebootOnlyCycles++
+            }
+            else {
+                $consecutiveRebootOnlyCycles = 0
+            }
+
+            if ($isRebootOnlyCycle -and $consecutiveRebootOnlyCycles -ge $maxRebootOnlyCycles) {
+                $convergence = & $testConvergence 'Reboot-only cycles reached safety cap; verifying patch convergence.'
+                if ($convergence.IsCompliant) {
+                    $status = 'Compliant'
+                    $completedConvergence = $true
+                    break
+                }
+            }
+
+            if ($needsReboot) {
                 if (-not [bool]$workerSettings.autoRebootWhenRequired) {
                     throw "Updates require a reboot but autoRebootWhenRequired is disabled for '$vmName'."
                 }
@@ -259,7 +312,23 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                     -Message 'Restarting guest after update installation.'
                 Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
                     -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
-                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
+                    -PostRebootWarmUpSeconds $postRebootWarmUpSeconds
+
+                $convergence = & $testConvergence 'Verifying patch convergence after reboot.'
+                if ($convergence.IsCompliant) {
+                    $status = 'Compliant'
+                    $completedConvergence = $true
+                    break
+                }
+            }
+        }
+
+        if (-not $completedConvergence) {
+            $convergence = & $testConvergence 'Final convergence verification after patch cycles.'
+            if ($convergence.IsCompliant) {
+                $status = 'Compliant'
+                $completedConvergence = $true
             }
         }
 

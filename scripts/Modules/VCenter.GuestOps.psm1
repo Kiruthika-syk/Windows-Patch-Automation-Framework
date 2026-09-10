@@ -483,7 +483,8 @@ function Restart-PatchVMGuest {
         [Parameter(Mandatory)]$Server,
         [Parameter(Mandatory)][pscredential]$GuestCredential,
         [ValidateRange(30, 7200)][int]$TimeoutSeconds = 1200,
-        [ValidateRange(2, 120)][int]$PollSeconds = 10
+        [ValidateRange(2, 120)][int]$PollSeconds = 10,
+        [ValidateRange(0, 600)][int]$PostRebootWarmUpSeconds = 90
     )
 
     try {
@@ -494,6 +495,69 @@ function Restart-PatchVMGuest {
         # Guest Operations commonly loses the response while Windows is shutting down.
     }
     Wait-VMToolsReady -VM $VM -Server $Server -TimeoutSeconds $TimeoutSeconds -PollSeconds $PollSeconds -RequireObservedNotReady
+
+    if ($PostRebootWarmUpSeconds -gt 0) {
+        Invoke-GuestPostRebootWarmUp -VM $VM -GuestCredential $GuestCredential -WarmUpSeconds $PostRebootWarmUpSeconds
+    }
+}
+
+function Invoke-GuestPostRebootWarmUp {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [ValidateRange(0, 600)][int]$WarmUpSeconds = 90
+    )
+
+    Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+`$ErrorActionPreference = 'SilentlyContinue'
+foreach (`$serviceName in @('cryptsvc','bits','wuauserv','msiserver')) {
+    Set-Service -Name `$serviceName -StartupType Manual
+    Start-Service -Name `$serviceName
+}
+Start-Sleep -Seconds $WarmUpSeconds
+"@ | Out-Null
+}
+
+function Test-GuestPatchConvergence {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)][string]$SearchCriteria
+    )
+
+    $escapedCriteria = $SearchCriteria.Replace("'", "''")
+    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+`$ErrorActionPreference = 'Stop'
+`$criteria = '$escapedCriteria'
+`$session = New-Object -ComObject Microsoft.Update.Session
+`$searcher = `$session.CreateUpdateSearcher()
+`$result = `$searcher.Search(`$criteria)
+`$info = New-Object -ComObject Microsoft.Update.SystemInfo
+`$registryRebootPending = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired',
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending',
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting',
+    'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations'
+) | Where-Object { Test-Path -LiteralPath `$_ }
+`$pendingCount = [int]`$result.Updates.Count
+`$isCompliant = (`$pendingCount -eq 0) -and (`$registryRebootPending.Count -eq 0) -and (-not [bool]`$info.RebootRequired)
+[pscustomobject]@{
+    pendingUpdates = `$pendingCount
+    rebootRequired = [bool]`$info.RebootRequired
+    registryRebootPending = (`$registryRebootPending.Count -gt 0)
+    isCompliant = `$isCompliant
+} | ConvertTo-Json -Compress
+"@
+
+    $parsed = $output.Trim() | ConvertFrom-Json
+    [pscustomobject]@{
+        PendingUpdates = [int]$parsed.pendingUpdates
+        RebootRequired = [bool]$parsed.rebootRequired
+        RegistryRebootPending = [bool]$parsed.registryRebootPending
+        IsCompliant = [bool]$parsed.isCompliant
+    }
 }
 
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
@@ -501,4 +565,4 @@ Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, 
     Wait-VMToolsReady, Invoke-GuestPowerShell, Initialize-GuestPatchWorkspace,
     Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
     Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts, Invoke-GuestWindowsUpdateRepair,
-    Copy-GuestPatchArtifacts, Restart-PatchVMGuest
+    Copy-GuestPatchArtifacts, Restart-PatchVMGuest, Invoke-GuestPostRebootWarmUp, Test-GuestPatchConvergence

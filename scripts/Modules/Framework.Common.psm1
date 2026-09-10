@@ -122,8 +122,8 @@ function Assert-FrameworkSettings {
     param([Parameter(Mandatory)]$Settings)
 
     $required = 'vCenterServer', 'ignoreInvalidCertificate', 'guestWorkingDirectory',
-        'windowsUpdateSearchCriteria', 'autoRebootWhenRequired', 'maxPatchCycles', 'throttleLimit',
-        'pollIntervalSeconds', 'timeouts', 'retry'
+        'windowsUpdateSearchCriteria', 'autoRebootWhenRequired', 'maxPatchCycles', 'maxRebootOnlyCycles',
+        'postRebootWarmUpSeconds', 'throttleLimit', 'pollIntervalSeconds', 'timeouts', 'retry'
     foreach ($name in $required) {
         if ($Settings.PSObject.Properties.Name -notcontains $name) {
             throw "Missing required setting '$name'."
@@ -139,6 +139,12 @@ function Assert-FrameworkSettings {
     }
     if ([int]$Settings.maxPatchCycles -lt 1 -or [int]$Settings.maxPatchCycles -gt 100) {
         throw 'maxPatchCycles must be between 1 and 100.'
+    }
+    if ([int]$Settings.maxRebootOnlyCycles -lt 1 -or [int]$Settings.maxRebootOnlyCycles -gt 20) {
+        throw 'maxRebootOnlyCycles must be between 1 and 20.'
+    }
+    if ([int]$Settings.postRebootWarmUpSeconds -lt 0 -or [int]$Settings.postRebootWarmUpSeconds -gt 600) {
+        throw 'postRebootWarmUpSeconds must be between 0 and 600.'
     }
     if ([int]$Settings.throttleLimit -lt 1 -or [int]$Settings.throttleLimit -gt 100) {
         throw 'throttleLimit must be between 1 and 100.'

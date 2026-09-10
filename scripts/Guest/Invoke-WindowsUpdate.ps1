@@ -69,6 +69,68 @@ function Test-WindowsUpdateComError {
     return $message -match '(?i)800703fa|8007041d|80040154|80070005|Microsoft\.Update\.(Session|SystemInfo)|COM class factory|marked for deletion|NoCOMClassIdentified|CimException|GetCimInstanceCommand'
 }
 
+function Get-BootAgeMinutes {
+    try {
+        $lastBoot = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
+        return (New-TimeSpan -Start $lastBoot -End (Get-Date)).TotalMinutes
+    }
+    catch {
+        return 999
+    }
+}
+
+function Test-RegistryRebootPending {
+    $paths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\PostRebootReporting',
+        'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations'
+    )
+    foreach ($path in $paths) {
+        if (Test-Path -LiteralPath $path) { return $true }
+    }
+    return $false
+}
+
+function Test-EffectiveRebootRequired {
+    param(
+        [bool]$SystemInfoRebootRequired
+    )
+
+    if (Test-RegistryRebootPending) { return $true }
+    return [bool]$SystemInfoRebootRequired
+}
+
+function Get-ApplicableUpdates {
+    param(
+        [Parameter(Mandatory)]$UpdateSession,
+        [Parameter(Mandatory)][string]$SearchCriteria
+    )
+
+    $searcher = $UpdateSession.CreateUpdateSearcher()
+    $primary = $searcher.Search($SearchCriteria)
+    $merged = @{}
+    foreach ($update in @($primary.Updates)) {
+        $merged[$update.Identity.UpdateID] = $update
+    }
+
+    # Defender/security intelligence and other definition updates can be missed by a single scan.
+    $definitionCriteria = "$SearchCriteria and CategoryIDs contains '798'"
+    try {
+        $definitionResult = $searcher.Search($definitionCriteria)
+        foreach ($update in @($definitionResult.Updates)) {
+            if (-not $merged.ContainsKey($update.Identity.UpdateID)) {
+                $merged[$update.Identity.UpdateID] = $update
+            }
+        }
+    }
+    catch {
+        # Some agents reject the category filter; the primary scan is still used.
+    }
+
+    return @($merged.Values)
+}
+
 function Set-WindowsUpdateServiceState {
     param(
         [Parameter(Mandatory)][ValidateSet('Stop', 'Start')][string]$Action,
@@ -120,32 +182,24 @@ function Repair-WindowsUpdateAgent {
 }
 
 function Initialize-WindowsUpdateEnvironment {
-    try {
-        $lastBoot = (Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime
-        $bootAgeMinutes = (New-TimeSpan -Start $lastBoot -End (Get-Date)).TotalMinutes
-        if ($bootAgeMinutes -lt 20) {
-            Write-GuestLog -Level Information -Stage Initialize -Message 'Recent reboot detected; warming up Windows Update services.' -Data @{
-                bootAgeMinutes = [Math]::Round($bootAgeMinutes, 2)
-            }
-            Set-WindowsUpdateServiceState -Action Start
-            Start-Sleep -Seconds 45
-        }
+    $bootAgeMinutes = Get-BootAgeMinutes
+    if ($bootAgeMinutes -ge 20) { return }
+
+    Write-GuestLog -Level Information -Stage Initialize -Message 'Recent reboot detected; warming up Windows Update services.' -Data @{
+        bootAgeMinutes = [Math]::Round($bootAgeMinutes, 2)
     }
-    catch {
-        if (Test-WindowsUpdateComError -ErrorRecord $_) {
-            Write-GuestLog -Level Warning -Stage Initialize -Message 'Skipped boot warm-up because the guest OS has pending registry deletion state.'
-            return
-        }
-        throw
-    }
+    Set-WindowsUpdateServiceState -Action Start
+    $warmUpSeconds = if ($bootAgeMinutes -lt 5) { 90 } else { 45 }
+    Start-Sleep -Seconds $warmUpSeconds
 }
 
 function New-WindowsUpdateSession {
     param(
-        [ValidateRange(1, 3)][int]$MaxAttempts = 2
+        [ValidateRange(1, 4)][int]$MaxAttempts = 3
     )
 
     $remediationApplied = $false
+    $bootAgeMinutes = Get-BootAgeMinutes
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         try {
             $updateSession = New-Object -ComObject Microsoft.Update.Session
@@ -160,6 +214,17 @@ function New-WindowsUpdateSession {
         catch {
             $isComError = Test-WindowsUpdateComError -ErrorRecord $_
             if (-not $isComError -or $attempt -eq $MaxAttempts) { throw }
+
+            if ($bootAgeMinutes -lt 15) {
+                Write-GuestLog -Level Warning -Stage Initialize -Message 'COM unavailable shortly after reboot; waiting for guest servicing to settle.' -Data @{
+                    bootAgeMinutes = [Math]::Round($bootAgeMinutes, 2)
+                    attempt = $attempt
+                }
+                Set-WindowsUpdateServiceState -Action Start
+                Start-Sleep -Seconds 60
+                continue
+            }
+
             Repair-WindowsUpdateAgent
             $remediationApplied = $true
         }
@@ -220,12 +285,11 @@ try {
     Write-GuestLog -Level Information -Stage Scan -Message 'Scanning Windows Update Agent.' -Data @{
         criteria = $SearchCriteria
     }
-    $searcher = $updateSession.CreateUpdateSearcher()
-    $searchResult = $searcher.Search($SearchCriteria)
-    $result.applicableCount = $searchResult.Updates.Count
+    $applicableUpdates = @(Get-ApplicableUpdates -UpdateSession $updateSession -SearchCriteria $SearchCriteria)
+    $result.applicableCount = $applicableUpdates.Count
 
-    if ($searchResult.Updates.Count -eq 0) {
-        $result.rebootRequired = [bool]$systemInformation.RebootRequired
+    if ($applicableUpdates.Count -eq 0) {
+        $result.rebootRequired = Test-EffectiveRebootRequired -SystemInfoRebootRequired ([bool]$systemInformation.RebootRequired)
         if ($result.rebootRequired) {
             $result.status = 'RebootRequired'
             Write-GuestLog -Level Information -Stage Scan -Message 'No updates found, but Windows reports a pending reboot.'
@@ -237,7 +301,7 @@ try {
     }
     else {
         $downloadCollection = New-Object -ComObject Microsoft.Update.UpdateColl
-        foreach ($update in $searchResult.Updates) {
+        foreach ($update in $applicableUpdates) {
             if (-not $update.EulaAccepted) {
                 $update.AcceptEula()
                 Write-GuestLog -Level Information -Stage Eula -Message 'Accepted update EULA.' -Data @{
@@ -276,7 +340,10 @@ try {
         $installer = $updateSession.CreateUpdateInstaller()
         $installer.Updates = $installCollection
         $installResult = $installer.Install()
-        $result.rebootRequired = [bool]($installResult.RebootRequired -or $systemInformation.RebootRequired)
+        $systemInformation = New-Object -ComObject Microsoft.Update.SystemInfo
+        $result.rebootRequired = Test-EffectiveRebootRequired -SystemInfoRebootRequired (
+            [bool]($installResult.RebootRequired -or $systemInformation.RebootRequired)
+        )
 
         for ($index = 0; $index -lt $installCollection.Count; $index++) {
             $update = $installCollection.Item($index)

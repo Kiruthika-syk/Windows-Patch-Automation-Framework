@@ -51,7 +51,9 @@ Describe 'Framework settings validation' {
             guestWorkingDirectory = 'C:\ProgramData\Patch'
             windowsUpdateSearchCriteria = 'IsInstalled=0'
             autoRebootWhenRequired = $true
-            maxPatchCycles = 5
+            maxPatchCycles = 8
+            maxRebootOnlyCycles = 2
+            postRebootWarmUpSeconds = 90
             throttleLimit = 4
             pollIntervalSeconds = 15
             timeouts = [pscustomobject]@{

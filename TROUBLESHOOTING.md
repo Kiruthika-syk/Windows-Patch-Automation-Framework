@@ -79,6 +79,14 @@ old images with prerequisite chains, but the cap prevents endless runs. Review
 cycle results, reboot state, WSUS approvals, and servicing-stack requirements.
 Raise the cap only through change review.
 
+If the VM shows **0 pending updates** in Windows Update but the run still failed,
+check whether the guest was stuck in a reboot-only loop. Newer framework versions
+verify convergence after each reboot and treat `0 pending + no registry reboot
+pending` as compliant even when `SystemInfo.RebootRequired` is stale.
+
+Tune `maxRebootOnlyCycles` and `postRebootWarmUpSeconds` in `config/settings.json`
+when guests need more time to settle after large cumulative updates.
+
 ## Reports missing after a failed run
 
 The upload step uses `if: always()`. If no artifact exists:
