@@ -1,0 +1,16 @@
+[Unit]
+Description=Windows Patch Automation documentation (static HTTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.cursor-server/Windows-Patch-Automation-Framework
+Environment=PATCH_DOCS_HOST=0.0.0.0
+Environment=PATCH_DOCS_PORT=8080
+ExecStart=%h/.cursor-server/Windows-Patch-Automation-Framework/scripts/serve-docs.sh foreground
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

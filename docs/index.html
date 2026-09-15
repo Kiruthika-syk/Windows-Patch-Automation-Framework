@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Windows Patch Automation Framework — Guide</title>
+  <meta name="description" content="How the Windows Patch Automation Framework works: vCenter Guest Operations, update scanning, installation, reboots, and compliance reporting.">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface2: #243044;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #1f3a5f;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --border: #30363d;
+      --code-bg: #161b22;
+      --sidebar-w: 280px;
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      font-size: 15px;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    code { padding: 0.15em 0.4em; }
+    pre {
+      padding: 1rem 1.1rem;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    pre code { padding: 0; border: none; background: none; }
+
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      overflow-y: auto;
+      padding: 1.5rem 0;
+      z-index: 100;
+    }
+    .sidebar-brand {
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .sidebar-brand h1 {
+      font-size: 1rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .sidebar-brand p {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+    .nav-group { margin-bottom: 0.75rem; }
+    .nav-group-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      padding: 0.5rem 1.25rem 0.25rem;
+    }
+    .nav-link {
+      display: block;
+      padding: 0.4rem 1.25rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+      border-left: 2px solid transparent;
+    }
+    .nav-link:hover { color: var(--text); background: var(--surface2); text-decoration: none; }
+    .nav-link.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-dim); }
+
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      max-width: 920px;
+      padding: 2.5rem 2.5rem 4rem;
+    }
+    .hero {
+      margin-bottom: 2.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 { font-size: 1.85rem; font-weight: 600; margin-bottom: 0.75rem; }
+    .hero .lead { color: var(--muted); font-size: 1.05rem; max-width: 42rem; }
+    .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.25rem; }
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+    }
+    .badge-accent { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    section { margin-bottom: 3rem; scroll-margin-top: 1.5rem; }
+    section h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    section h3 { font-size: 1.05rem; margin: 1.5rem 0 0.75rem; color: var(--text); }
+    section p { margin-bottom: 0.85rem; color: #c9d1d9; }
+    section ul, section ol { margin: 0.75rem 0 1rem 1.25rem; color: #c9d1d9; }
+    section li { margin-bottom: 0.4rem; }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.1rem;
+    }
+    .card h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+      font-family: var(--mono);
+      color: var(--accent);
+    }
+    .card p { font-size: 0.88rem; margin: 0; color: var(--muted); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.88rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+    }
+    th { background: var(--surface); color: var(--muted); font-weight: 600; }
+    tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+    .status-ok { color: var(--success); font-weight: 600; }
+    .status-warn { color: var(--warning); font-weight: 600; }
+    .status-fail { color: var(--danger); font-weight: 600; }
+
+    .flow-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .mermaid { background: transparent !important; }
+
+    .path-diagram {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--muted);
+      white-space: pre;
+      margin: 1rem 0;
+    }
+
+    .steps { counter-reset: step; list-style: none; margin-left: 0; }
+    .steps li {
+      counter-increment: step;
+      position: relative;
+      padding-left: 2.5rem;
+      margin-bottom: 1rem;
+    }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      width: 1.6rem;
+      height: 1.6rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-radius: 50%;
+      text-align: center;
+      line-height: 1.6rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .update-banner {
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    .update-banner strong { color: var(--accent); }
+    .update-banner time { color: var(--muted); font-size: 0.82rem; }
+
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0 1.5rem;
+    }
+    .score-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      text-align: center;
+    }
+    .score-box .num { font-size: 1.5rem; font-weight: 600; }
+    .score-box .lbl { font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem; }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar" aria-label="Documentation navigation">
+      <div class="sidebar-brand">
+        <h1>Windows Patch Automation</h1>
+        <p>Process flow &amp; operator guide</p>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">Overview</div>
+        <a class="nav-link" href="#overview">What it does</a>
+        <a class="nav-link" href="#flow">End-to-end flow</a>
+        <a class="nav-link" href="#quickstart">Quick start</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">Mechanism</div>
+        <a class="nav-link" href="#connection">Connection</a>
+        <a class="nav-link" href="#scripts">Scripts</a>
+        <a class="nav-link" href="#scanning">Update scanning</a>
+        <a class="nav-link" href="#installing">Installation</a>
+        <a class="nav-link" href="#orchestrator">Orchestrator loop</a>
+        <a class="nav-link" href="#logging">Logging &amp; reports</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-title">Reference</div>
+        <a class="nav-link" href="#config">Configuration</a>
+        <a class="nav-link" href="#results">BLR results</a>
+        <a class="nav-link" href="#inventory">VM inventory</a>
+        <a class="nav-link" href="#security">Security</a>
+        <a class="nav-link" href="#links">More docs</a>
+      </div>
+    </nav>
+
+    <main class="main">
+      <div class="update-banner" role="status">
+        <strong>Results updated</strong> — 15 Sep 2026, 3:22 PM IST.
+        Inventory shows <strong>2 Compliant VMs</strong>: BLR-AARYA-VS and blr-122106 VS.
+        <time datetime="2026-09-15">Last sync: Sep 15, 2026</time>
+      </div>
+
+      <header class="hero" id="overview">
+        <h1>Windows Patch Automation Framework</h1>
+        <p class="lead">
+          Patch Windows VMs on VMware vCenter without RDP or WinRM. The runner connects to vCenter only;
+          VMware Guest Operations runs update scripts inside each guest using the native Windows Update COM API.
+        </p>
+        <div class="badges">
+          <span class="badge badge-accent">Guest Operations only</span>
+          <span class="badge">PowerCLI + PowerShell 7</span>
+          <span class="badge">JSONL audit logs</span>
+          <span class="badge">Sep 15, 2026 · v1.2</span>
+        </div>
+      </header>
+
+      <section id="flow">
+        <h2>End-to-end flow</h2>
+        <p>From operator action to compliance report — every VM is an isolated worker with its own vCenter session.</p>
+        <div class="flow-box">
+          <pre class="mermaid">
+flowchart TD
+    A[Load config and credentials] --> B[Validate environment]
+    B --> C{VM and guest creds OK?}
+    C -->|No| D[Stop and fix inventory or creds]
+    C -->|Yes| E[Connect vCenter]
+    E --> F[Find VM by name or IP]
+    F --> G[Wait for VMware Tools]
+    G --> H[Copy scripts into guest]
+    H --> I[Repair WU COM if needed]
+    I --> J[Patch cycle: scan install]
+    J --> K{Updates remain?}
+    K -->|Yes| L[Reboot if required]
+    L --> M[Warm up and verify convergence]
+    M --> J
+    K -->|No| N[Mark Compliant]
+    N --> O[Export reports and JSONL logs]
+          </pre>
+        </div>
+        <h3>Happy path in three steps</h3>
+        <ol class="steps">
+          <li><strong>Validate</strong> — vCenter login works; VM exists; guest account works via a test <code>hostname</code> command.</li>
+          <li><strong>Patch loop</strong> — Scan, download, and install all pending updates; reboot when required; repeat until zero pending.</li>
+          <li><strong>Report</strong> — Compliance JSON/CSV/HTML plus per-VM logs under <code>output/&lt;run-id&gt;/</code>.</li>
+        </ol>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quick start</h2>
+        <h3>Prerequisites</h3>
+        <ul>
+          <li>VMware Tools running on target VMs (<code>guestToolsRunning</code>)</li>
+          <li>Two credential pairs: vCenter SSO + Windows local admin inside each VM</li>
+          <li>PowerCLI 13.3 and PowerShell 7.2+ on the runner</li>
+          <li>Guest can reach WSUS or Microsoft Update</li>
+        </ul>
+        <h3>Run locally</h3>
+        <pre><code>cd Windows-Patch-Automation-Framework
+source ~/.windows_patch_creds
+
+# Validate only
+pwsh -File ./scripts/Validate-PatchEnvironment.ps1
+
+# Validate and patch enabled VMs in config/vms.csv
+./scripts/execute_repair_and_patch.sh
+
+# Watch progress
+tail -f output/patch-run-*.log</code></pre>
+        <h3>Inventory row</h3>
+        <p>Set <code>Enabled=true</code> in <code>config/vms.csv</code> only for approved VMs. Use exact vCenter VM name or provide IP for fallback lookup.</p>
+      </section>
+
+      <section id="connection">
+        <h2>Connection mechanism</h2>
+        <p>Two separate credential pairs — never mix them up.</p>
+        <table>
+          <thead>
+            <tr><th>Environment variable</th><th>Used for</th><th>Example</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>VCENTER_USERNAME</code> / <code>VCENTER_PASSWORD</code></td><td>vCenter SSO login</td><td><code>ks4@vsphere.local</code></td></tr>
+            <tr><td><code>WINDOWS_GUEST_USERNAME</code> / <code>WINDOWS_GUEST_PASSWORD</code></td><td>Inside each VM via Guest Ops</td><td><code>admin</code> or <code>Administrator</code></td></tr>
+          </tbody>
+        </table>
+        <h3>Network path</h3>
+        <div class="path-diagram">Runner ──HTTPS 443──► vCenter (e.g. blr-vsphere-01.strykercorp.com)
+                         │
+                         └── VMware Tools ──► Windows guest
+                              Invoke-VMScript · Copy-VMGuestFile</div>
+        <ul>
+          <li>Runner does <strong>not</strong> use RDP (3389), WinRM (5985), or SMB to the VM IP.</li>
+          <li>Guest downloads updates via its normal Windows Update / WSUS path.</li>
+        </ul>
+        <h3>Key PowerCLI operations</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>Connect-VIServer</code></td><td>Authenticate to vCenter</td></tr>
+            <tr><td><code>Get-VM</code> + IP fallback</td><td>Resolve exact VM object</td></tr>
+            <tr><td><code>Copy-VMGuestFile -LocalToGuest</code></td><td>Upload patch scripts to guest folder</td></tr>
+            <tr><td><code>Invoke-VMScript</code></td><td>Run PowerShell inside the guest as local admin</td></tr>
+            <tr><td><code>Copy-VMGuestFile -GuestToLocal</code></td><td>Download result JSON and logs</td></tr>
+            <tr><td><code>Restart-Computer</code> via Invoke-VMScript</td><td>Reboot guest; wait for Tools to return</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="scripts">
+        <h2>Scripts reference</h2>
+        <p>One-line role for each component in the framework.</p>
+        <div class="card-grid">
+          <div class="card"><h4>execute_repair_and_patch.sh</h4><p>Loads credentials, validates, then runs full patch job.</p></div>
+          <div class="card"><h4>Validate-PatchEnvironment.ps1</h4><p>Read-only: tests vCenter + guest login per VM.</p></div>
+          <div class="card"><h4>Invoke-WindowsPatchAutomation.ps1</h4><p>Main orchestrator: parallel workers, cycles, reboots, reports.</p></div>
+          <div class="card"><h4>VCenter.GuestOps.psm1</h4><p>Connect, VM lookup, script staging, polling, reboot, convergence.</p></div>
+          <div class="card"><h4>Framework.Common.psm1</h4><p>Config validation, JSONL logging, retries, report export.</p></div>
+          <div class="card"><h4>Guest/Invoke-WindowsUpdate.ps1</h4><p>Inside VM: one scan / download / install cycle via WU COM.</p></div>
+          <div class="card"><h4>Guest/Repair-WindowsUpdateAgent.ps1</h4><p>Inside VM: fix broken WU COM (services, cache, DISM/SFC).</p></div>
+          <div class="card"><h4>Resolve-VMInventory.ps1</h4><p>Maps spreadsheet IPs to exact vCenter VM names.</p></div>
+        </div>
+      </section>
+
+      <section id="scanning">
+        <h2>Update checking process</h2>
+        <p>Runs inside the guest via <code>Microsoft.Update.Session</code> COM API.</p>
+        <ol>
+          <li><strong>Warm-up</strong> — After recent reboot, start WU services and wait 45–90 seconds.</li>
+          <li><strong>Primary scan</strong> — <code>IsInstalled=0 and IsHidden=0</code></li>
+          <li><strong>Definition scan</strong> — Same criteria plus <code>CategoryIDs contains '798'</code> (Defender / definition updates).</li>
+          <li><strong>Merge</strong> — Combine results so security intelligence updates are not missed.</li>
+          <li><strong>Evaluate</strong> — Zero updates + no registry reboot pending → <code>NoUpdates</code> (done).</li>
+        </ol>
+        <p>Reboot detection uses registry keys (CBS, WU RebootRequired), not only the COM <code>RebootRequired</code> flag — this prevents false reboot loops after updates are installed.</p>
+      </section>
+
+      <section id="installing">
+        <h2>Update installation process</h2>
+        <ol>
+          <li>Accept EULAs for each applicable update.</li>
+          <li>Download all updates in one batch (<code>CreateUpdateDownloader</code>).</li>
+          <li>Install all downloaded updates in one batch (<code>CreateUpdateInstaller</code>).</li>
+          <li>Record per-update title, KB, result code, HRESULT, reboot flag.</li>
+          <li>Write <code>cycle-N-result.json</code> atomically; runner polls for this file.</li>
+        </ol>
+        <p>If COM fails with <code>0x800703FA</code> shortly after reboot, the guest waits and retries before renaming the SoftwareDistribution cache.</p>
+      </section>
+
+      <section id="orchestrator">
+        <h2>Orchestrator patch loop</h2>
+        <p>For each enabled row in <code>config/vms.csv</code>, up to <code>throttleLimit</code> VMs run in parallel.</p>
+        <table>
+          <thead><tr><th>Phase</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td>Connect</td><td>Connect-PatchVCenter with exponential retry</td></tr>
+            <tr><td>Resolve VM</td><td>By name; fallback match by IP from inventory</td></tr>
+            <tr><td>Tools ready</td><td>Poll until guestToolsRunning and guest state = running</td></tr>
+            <tr><td>Stage</td><td>Copy patch + repair scripts to guest working directory</td></tr>
+            <tr><td>Repair</td><td>Quick COM test; basic repair; DISM/SFC only if still broken</td></tr>
+            <tr><td>Cycle 1..N</td><td>Start async guest job → poll → copy artifacts</td></tr>
+            <tr><td>Reboot</td><td>Restart-Computer → wait Tools → 90s service warm-up</td></tr>
+            <tr><td>Convergence</td><td>0 pending + no registry reboot → Compliant</td></tr>
+          </tbody>
+        </table>
+        <h3>Final status values</h3>
+        <table>
+          <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td class="status-ok">Compliant</td><td>No pending updates; convergence verified</td></tr>
+            <tr><td class="status-warn">MaxCyclesExceeded</td><td>Safety cap hit (updates may still have installed)</td></tr>
+            <tr><td class="status-fail">Failed</td><td>Hard error: COM, timeout, auth, etc.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="logging">
+        <h2>Logging and reports</h2>
+        <p>All audit data uses JSON Lines (one JSON object per line) plus structured JSON reports.</p>
+        <table>
+          <thead><tr><th>Output file</th><th>Written by</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr><td><code>master.jsonl</code></td><td>Orchestrator</td><td>Merged run log</td></tr>
+            <tr><td><code>vm-logs/&lt;VM&gt;/orchestrator.jsonl</code></td><td>Orchestrator</td><td>Connect, cycles, reboots, errors</td></tr>
+            <tr><td><code>cycle-N-guest.jsonl</code></td><td>Guest script</td><td>Scan, download, install steps</td></tr>
+            <tr><td><code>cycle-N-result.json</code></td><td>Guest script</td><td>Counts, update list, status</td></tr>
+            <tr><td><code>compliance-report.json</code></td><td>Orchestrator</td><td>Final fleet result + update details</td></tr>
+            <tr><td><code>compliance-report.csv / .html</code></td><td>Orchestrator</td><td>Summary for Excel and browsers</td></tr>
+          </tbody>
+        </table>
+        <h3>Sample log entry</h3>
+        <pre><code>{
+  "timestampUtc": "2026-09-08T11:20:00.3209404Z",
+  "level": "Information",
+  "stage": "PatchCycle",
+  "vmName": "BLR-AARYA-VS",
+  "message": "Starting patch cycle 1.",
+  "data": {}
+}</code></pre>
+      </section>
+
+      <section id="config">
+        <h2>Configuration</h2>
+        <table>
+          <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>config/settings.json</code></td><td>Timeouts, max cycles, warm-up, search criteria, throttle</td></tr>
+            <tr><td><code>config/vms.csv</code></td><td>VM inventory; only Enabled=true rows are patched</td></tr>
+            <tr><td><code>config/vcenters.json</code></td><td>BLR / FW / STC vCenter server names</td></tr>
+            <tr><td><code>~/.windows_patch_creds</code></td><td>Local credentials (not in git)</td></tr>
+          </tbody>
+        </table>
+        <h3>Key settings</h3>
+        <table>
+          <thead><tr><th>Setting</th><th>Default</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><code>maxPatchCycles</code></td><td>8</td><td>Max install/reboot cycles per VM</td></tr>
+            <tr><td><code>maxRebootOnlyCycles</code></td><td>2</td><td>Cap empty reboot loops</td></tr>
+            <tr><td><code>postRebootWarmUpSeconds</code></td><td>90</td><td>WU service settle time after reboot</td></tr>
+            <tr><td><code>throttleLimit</code></td><td>4</td><td>Parallel VM workers</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="results">
+        <h2>BLR patch results</h2>
+        <p>Fleet status from all validation and patch runs on <code>blr-vsphere-01.strykercorp.com</code> (Sep 7–15, 2026).</p>
+
+        <div class="score-grid">
+          <div class="score-box"><div class="num status-ok">2</div><div class="lbl">Compliant VMs</div></div>
+          <div class="score-box"><div class="num">4</div><div class="lbl">Successful patch runs</div></div>
+          <div class="score-box"><div class="num">9</div><div class="lbl">Updates installed</div></div>
+        </div>
+
+        <h3>Current fleet status</h3>
+        <table>
+          <thead>
+            <tr><th>VM</th><th>IP</th><th>Guest user</th><th>Status</th><th>Updates</th><th>Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>BLR-AARYA-VS</td><td>10.90.128.199</td><td>admin</td>
+              <td class="status-ok">Compliant</td><td>8 total</td>
+              <td>v3 run Sep 15 — 0 pending, 1 cycle, 1.7 min</td>
+            </tr>
+            <tr>
+              <td>blr-122106 VS</td><td>10.90.122.106</td><td>Administrator</td>
+              <td class="status-ok">Compliant</td><td>1</td>
+              <td>Azure Arc KB5121364 — Sep 7</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>BLR-AARYA-VS — updates installed (runs 1 &amp; 2)</h3>
+        <table>
+          <thead><tr><th>KB</th><th>Update</th><th>Run</th></tr></thead>
+          <tbody>
+            <tr><td>KB5007651</td><td>Windows Security platform</td><td>Run 1 · Sep 8</td></tr>
+            <tr><td>KB890830</td><td>MSRT v5.144 / v5.145</td><td>Run 1 &amp; 2</td></tr>
+            <tr><td>KB5121364</td><td>Azure Connected Machine Agent</td><td>Run 1</td></tr>
+            <tr><td>KB5120708</td><td>.NET Framework Security (Aug 2026)</td><td>Run 1</td></tr>
+            <tr><td>KB5120233</td><td>Security Update (Aug 2026)</td><td>Run 1</td></tr>
+            <tr><td>KB5122871</td><td>Security Update (Sep 2026)</td><td>Run 2</td></tr>
+            <tr><td>KB5126052</td><td>.NET Framework Security (Sep 2026)</td><td>Run 2</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Run history</h3>
+        <table>
+          <thead><tr><th>VM</th><th>Run</th><th>Date</th><th>Status</th><th>Installed</th><th>Report folder</th></tr></thead>
+          <tbody>
+            <tr><td>BLR-AARYA-VS</td><td>v3</td><td>Sep 15</td><td class="status-ok">Compliant</td><td>0 (already patched)</td><td><code>7becc7c7853a4bb0afa1b9c2da60fc3a</code></td></tr>
+            <tr><td>BLR-AARYA-VS</td><td>v2</td><td>Sep 10</td><td class="status-ok">Compliant</td><td>3</td><td><code>c78d72c4937944d7bd9d607f41dabc8a</code></td></tr>
+            <tr><td>BLR-AARYA-VS</td><td>v1</td><td>Sep 8</td><td class="status-ok">Compliant</td><td>5</td><td><code>5637de7a54484859a587b219ba128f86</code></td></tr>
+            <tr><td>blr-122106 VS</td><td>v1</td><td>Sep 7</td><td class="status-ok">Compliant</td><td>1</td><td><code>8e5b69254c1c45fd92c366769e376fd1</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="inventory">
+        <h2>VM inventory (<code>config/vms.csv</code>)</h2>
+        <p>Production inventory — Compliant VMs only.</p>
+        <table>
+          <thead><tr><th>VMName</th><th>IP</th><th>Enabled</th><th>Owner</th><th>FQDN</th></tr></thead>
+          <tbody>
+            <tr><td>BLR-AARYA-VS</td><td>10.90.128.199</td><td>true</td><td>Shrikant Raghuvanshi</td><td>blr-aarya-vs.vcraeng.com</td></tr>
+            <tr><td>blr-122106 VS</td><td>10.90.122.106</td><td>true</td><td>NEPTUNE</td><td>blr-122106vs.vcraeng.com</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="security">
+        <h2>Security</h2>
+        <ul>
+          <li>Credentials live in environment variables or GitHub secrets — never in CSV, logs, or reports.</li>
+          <li>Guest scripts run as local admin only through VMware Guest Operations (audited in vCenter).</li>
+          <li>No inbound management ports required on VMs beyond VMware Tools and Windows Update egress.</li>
+        </ul>
+      </section>
+
+      <section id="links">
+        <h2>More documentation</h2>
+        <ul>
+          <li><a href="Process-Flow-and-Mechanism.md">Process-Flow-and-Mechanism.md</a> — Markdown source (same content)</li>
+          <li><a href="Windows-Patch-Automation-Manual.md">Windows-Patch-Automation-Manual.md</a> — Full operations manual</li>
+          <li><a href="../TROUBLESHOOTING.md">TROUBLESHOOTING.md</a> — Error diagnosis</li>
+          <li><a href="../README.md">README.md</a> — Repository overview</li>
+          <li><a href="https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework">GitHub repository</a></li>
+        </ul>
+      </section>
+
+      <footer class="footer">
+        Windows Patch Automation Framework · Updated 15 Sep 2026 ·
+        Open at <code>http://10.90.105.221:8080/</code> (HTTP, not HTTPS)
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+
+    const links = document.querySelectorAll('.nav-link');
+    const sections = [...links].map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+
+    function updateNav() {
+      let current = sections[0];
+      sections.forEach(sec => {
+        if (window.scrollY >= sec.offsetTop - 120) current = sec;
+      });
+      links.forEach(a => {
+        a.classList.toggle('active', a.getAttribute('href') === '#' + current.id);
+      });
+    }
+    window.addEventListener('scroll', updateNav);
+    updateNav();
+  </script>
+</body>
+</html>

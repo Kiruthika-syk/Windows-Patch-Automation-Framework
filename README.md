@@ -138,6 +138,12 @@ Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser
 Invoke-Pester ./tests -Output Detailed
 ```
 
+### Interactive documentation (website)
+
+Open **`docs/index.html`** in any browser for a navigable guide covering process flow,
+connection mechanism, scripts, update scanning/installation, logging, and BLR results.
+Host the `docs/` folder on GitHub Pages or an internal web server for team-wide access.
+
 A real acceptance test must still be performed against a disposable Windows VM
 with a snapshot/backup and approved maintenance window. See `TROUBLESHOOTING.md`
 and `SECURITY.md` before production rollout.
