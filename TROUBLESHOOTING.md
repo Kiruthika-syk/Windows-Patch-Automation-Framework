@@ -44,6 +44,11 @@ The framework now:
 If a guest still fails, confirm the account is in the local Administrators group
 and retry after the automatic reboot.
 
+Detached guest workers can also exit immediately when `#requires -RunAsAdministrator`
+blocks a non-elevated Guest Operations session. Newer framework versions skip repair
+when Windows Update COM is already healthy, use unique per-job log/result paths, and
+fall back to synchronous in-session repair when detached workers fail.
+
 ## PowerCLI connection or certificate failure
 
 - Use the configured vCenter FQDN and verify DNS/time synchronization.

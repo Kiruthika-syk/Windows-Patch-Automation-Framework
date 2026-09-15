@@ -1,5 +1,4 @@
 #requires -Version 5.1
-#requires -RunAsAdministrator
 <#
 .SYNOPSIS
 Repairs the native Windows Update Agent inside a guest VM.

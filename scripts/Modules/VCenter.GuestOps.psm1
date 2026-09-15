@@ -218,6 +218,32 @@ if ($current -ne 1) {
     }
 }
 
+function Test-GuestWindowsUpdateComAvailable {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential
+    )
+
+    try {
+        $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @'
+try {
+    $session = New-Object -ComObject Microsoft.Update.Session
+    $session.ClientApplicationID = 'Enterprise Windows Patch Automation Framework'
+    $null = New-Object -ComObject Microsoft.Update.SystemInfo
+    Write-Output 'OK'
+}
+catch {
+    Write-Output 'FAIL'
+}
+'@
+        return ($output.Trim() -eq 'OK')
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-GuestDetachedJobLauncherScript {
     [CmdletBinding()]
     param(
@@ -310,9 +336,10 @@ function Start-GuestPatchCycle {
     )
 
     $guestRoot = $GuestWorkingDirectory.TrimEnd('\', '/')
-    $resultPath = "$guestRoot\cycle-$Cycle-result.json"
-    $logPath = "$guestRoot\cycle-$Cycle-log.jsonl"
-    $pidPath = "$guestRoot\cycle-$Cycle.pid"
+    $jobId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $resultPath = "$guestRoot\cycle-$Cycle-$jobId-result.json"
+    $logPath = "$guestRoot\cycle-$Cycle-$jobId-log.jsonl"
+    $pidPath = "$guestRoot\cycle-$Cycle-$jobId.pid"
     $escapedScript = $GuestScriptPath.Replace("'", "''")
     $escapedResult = $resultPath.Replace("'", "''")
     $escapedLog = $logPath.Replace("'", "''")
@@ -414,9 +441,10 @@ function Start-GuestRepairJob {
     )
 
     $guestRoot = $GuestWorkingDirectory.TrimEnd('\', '/')
-    $resultPath = "$guestRoot\repair-result.json"
-    $logPath = "$guestRoot\repair-log.jsonl"
-    $pidPath = "$guestRoot\repair.pid"
+    $jobId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $resultPath = "$guestRoot\repair-$jobId-result.json"
+    $logPath = "$guestRoot\repair-$jobId-log.jsonl"
+    $pidPath = "$guestRoot\repair-$jobId.pid"
     $escapedScript = $GuestScriptPath.Replace("'", "''")
     $escapedResult = $resultPath.Replace("'", "''")
     $escapedLog = $logPath.Replace("'", "''")
@@ -508,6 +536,40 @@ function Copy-GuestRepairArtifacts {
     Get-Content -LiteralPath $localResult -Raw | ConvertFrom-Json -Depth 20
 }
 
+function Invoke-GuestWindowsUpdateRepairSync {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)][string]$GuestScriptPath,
+        [Parameter(Mandatory)][string]$GuestWorkingDirectory,
+        [Parameter(Mandatory)][string]$LocalDirectory,
+        [switch]$DeepRepair
+    )
+
+    $guestRoot = $GuestWorkingDirectory.TrimEnd('\', '/')
+    $jobId = [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $resultPath = "$guestRoot\repair-sync-$jobId-result.json"
+    $logPath = "$guestRoot\repair-sync-$jobId-log.jsonl"
+    $escapedScript = $GuestScriptPath.Replace("'", "''")
+    $escapedResult = $resultPath.Replace("'", "''")
+    $escapedLog = $logPath.Replace("'", "''")
+    $deepRepairFlag = if ($DeepRepair) { '-DeepRepair' } else { '' }
+
+    Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+& '$escapedScript' -ResultPath '$escapedResult' -LogPath '$escapedLog' $deepRepairFlag
+"@ | Out-Null
+
+    New-Item -ItemType Directory -Path $LocalDirectory -Force | Out-Null
+    $localResult = Join-Path $LocalDirectory 'repair-result.json'
+    $localLog = Join-Path $LocalDirectory 'repair-log.jsonl'
+    Copy-VMGuestFile -VM $VM -GuestCredential $GuestCredential -Source $resultPath `
+        -Destination $localResult -GuestToLocal -Force -ErrorAction Stop | Out-Null
+    Copy-VMGuestFile -VM $VM -GuestCredential $GuestCredential -Source $logPath `
+        -Destination $localLog -GuestToLocal -Force -ErrorAction Stop | Out-Null
+    Get-Content -LiteralPath $localResult -Raw | ConvertFrom-Json -Depth 20
+}
+
 function Invoke-GuestWindowsUpdateRepair {
     [CmdletBinding()]
     param(
@@ -525,14 +587,21 @@ function Invoke-GuestWindowsUpdateRepair {
         [switch]$DeepRepair
     )
 
-    $repairHandle = Start-GuestRepairJob -VM $VM -GuestCredential $GuestCredential `
-        -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory -DeepRepair:$DeepRepair
-    Wait-GuestRepairJob -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
-        -Server $Server -VCenterCredential $VCenterCredential -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
-        -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds -TimeoutSeconds $TimeoutSeconds `
-        -PollSeconds $PollSeconds
-    Copy-GuestRepairArtifacts -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
-        -LocalDirectory $LocalDirectory
+    try {
+        $repairHandle = Start-GuestRepairJob -VM $VM -GuestCredential $GuestCredential `
+            -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory -DeepRepair:$DeepRepair
+        Wait-GuestRepairJob -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
+            -Server $Server -VCenterCredential $VCenterCredential -IgnoreInvalidCertificate $IgnoreInvalidCertificate `
+            -WebOperationTimeoutSeconds $WebOperationTimeoutSeconds -TimeoutSeconds $TimeoutSeconds `
+            -PollSeconds $PollSeconds
+        Copy-GuestRepairArtifacts -VM $VM -GuestCredential $GuestCredential -RepairHandle $repairHandle `
+            -LocalDirectory $LocalDirectory
+    }
+    catch {
+        Invoke-GuestWindowsUpdateRepairSync -VM $VM -GuestCredential $GuestCredential `
+            -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory `
+            -LocalDirectory $LocalDirectory -DeepRepair:$DeepRepair
+    }
 }
 
 function Copy-GuestPatchArtifacts {
@@ -641,7 +710,7 @@ function Test-GuestPatchConvergence {
 
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
     Repair-PatchVCenterSession, Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
-    Wait-VMToolsReady, Invoke-GuestPowerShell, Enable-GuestLocalAdminTokenPolicy, Initialize-GuestPatchWorkspace,
-    Reset-GuestPatchWorkspace, Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
-    Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts, Invoke-GuestWindowsUpdateRepair,
-    Copy-GuestPatchArtifacts, Restart-PatchVMGuest, Invoke-GuestPostRebootWarmUp, Test-GuestPatchConvergence
+    Wait-VMToolsReady, Invoke-GuestPowerShell, Enable-GuestLocalAdminTokenPolicy, Test-GuestWindowsUpdateComAvailable,
+    Initialize-GuestPatchWorkspace, Reset-GuestPatchWorkspace, Copy-PatchScriptToGuest, Start-GuestPatchCycle,
+    Wait-GuestPatchCycle, Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts,
+    Invoke-GuestWindowsUpdateRepairSync, Invoke-GuestWindowsUpdateRepair, Copy-GuestPatchArtifacts, Restart-PatchVMGuest, Invoke-GuestPostRebootWarmUp, Test-GuestPatchConvergence

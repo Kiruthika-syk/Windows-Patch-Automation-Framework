@@ -1,5 +1,4 @@
 #requires -Version 5.1
-#requires -RunAsAdministrator
 <#
 .SYNOPSIS
 Runs one native Windows Update Agent cycle inside a Windows guest.

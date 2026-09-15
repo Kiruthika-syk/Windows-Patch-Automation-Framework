@@ -179,21 +179,20 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
         }
 
         $stage = 'RepairWindowsUpdate'
-        Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
-            -Message 'Running deep Windows Update Agent repair (DISM/SFC) before patching.'
-        $repairResult = Invoke-WithRetry -Operation {
-            Invoke-GuestWindowsUpdateRepair -VM $vm -GuestCredential $workerGuestCredential `
-                -GuestScriptPath $guestRepairScriptPath -GuestWorkingDirectory $guestDirectory `
-                -LocalDirectory $localVMDirectory -Server $server -VCenterCredential $workerVCenterCredential `
-                -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
-                -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
-                -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
-                -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
-        } -OperationName 'Repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
-            -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
-        if (-not [bool]$repairResult.comAvailable -and [string]$repairResult.status -ne 'Ready') {
-            Write-StructuredLog -Path $vmLog -Level Warning -Stage $stage -VMName $vmName `
-                -Message 'Basic repair did not restore Windows Update COM; running DISM/SFC deep repair.'
+        $comAvailableBeforeRepair = Test-GuestWindowsUpdateComAvailable -VM $vm -GuestCredential $workerGuestCredential
+        if ($comAvailableBeforeRepair) {
+            Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+                -Message 'Windows Update COM is available; skipping pre-patch repair.'
+            $repairResult = [pscustomobject]@{
+                status = 'Ready'
+                comAvailable = $true
+                deepRepairApplied = $false
+                rebootRequired = $false
+            }
+        }
+        else {
+            Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+                -Message 'Running Windows Update Agent repair before patching.'
             $repairResult = Invoke-WithRetry -Operation {
                 Invoke-GuestWindowsUpdateRepair -VM $vm -GuestCredential $workerGuestCredential `
                     -GuestScriptPath $guestRepairScriptPath -GuestWorkingDirectory $guestDirectory `
@@ -201,9 +200,23 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                     -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
                     -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
                     -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
-                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds) -DeepRepair
-            } -OperationName 'Deep repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds)
+            } -OperationName 'Repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
                 -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+            if (-not [bool]$repairResult.comAvailable -and [string]$repairResult.status -ne 'Ready') {
+                Write-StructuredLog -Path $vmLog -Level Warning -Stage $stage -VMName $vmName `
+                    -Message 'Basic repair did not restore Windows Update COM; running DISM/SFC deep repair.'
+                $repairResult = Invoke-WithRetry -Operation {
+                    Invoke-GuestWindowsUpdateRepair -VM $vm -GuestCredential $workerGuestCredential `
+                        -GuestScriptPath $guestRepairScriptPath -GuestWorkingDirectory $guestDirectory `
+                        -LocalDirectory $localVMDirectory -Server $server -VCenterCredential $workerVCenterCredential `
+                        -IgnoreInvalidCertificate ([bool]$workerSettings.ignoreInvalidCertificate) `
+                        -WebOperationTimeoutSeconds ([int]$workerSettings.timeouts.webOperationSeconds) `
+                        -TimeoutSeconds ([int]$workerSettings.timeouts.repairCycleSeconds) `
+                        -PollSeconds ([int]$workerSettings.pollIntervalSeconds) -DeepRepair
+                } -OperationName 'Deep repair Windows Update Agent' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+                    -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+            }
         }
         Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
             -Message 'Windows Update repair completed.' -Data @{
