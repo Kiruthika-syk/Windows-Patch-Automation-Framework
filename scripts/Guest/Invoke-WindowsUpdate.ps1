@@ -41,7 +41,28 @@ function Write-GuestLog {
         computerName = $env:COMPUTERNAME
         message = $Message
         data = $Data
-    } | ConvertTo-Json -Depth 10 -Compress | Add-Content -LiteralPath $LogPath -Encoding utf8
+    } | ConvertTo-Json -Depth 10 -Compress | ForEach-Object {
+        $line = $_
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+                $stream = [System.IO.File]::Open($LogPath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
+                try {
+                    $writer = New-Object System.IO.StreamWriter($stream, [System.Text.UTF8Encoding]::new($false))
+                    $writer.WriteLine($line)
+                    $writer.Flush()
+                }
+                finally {
+                    $writer.Dispose()
+                    $stream.Dispose()
+                }
+                break
+            }
+            catch {
+                if ($attempt -eq 5) { throw }
+                Start-Sleep -Milliseconds (250 * $attempt)
+            }
+        }
+    }
 }
 
 function Get-OperationResultName {

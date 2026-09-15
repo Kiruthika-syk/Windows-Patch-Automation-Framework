@@ -148,6 +148,11 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
         } -OperationName 'Stage guest patch scripts' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
             -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
 
+        Invoke-WithRetry -Operation {
+            Reset-GuestPatchWorkspace -VM $vm -GuestCredential $workerGuestCredential -GuestWorkingDirectory $guestDirectory
+        } -OperationName 'Reset guest patch workspace' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+            -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+
         $stage = 'PrepareGuestAutomation'
         $tokenPolicy = Invoke-WithRetry -Operation {
             Enable-GuestLocalAdminTokenPolicy -VM $vm -GuestCredential $workerGuestCredential

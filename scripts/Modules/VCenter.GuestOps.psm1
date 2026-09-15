@@ -258,6 +258,33 @@ New-Item -ItemType Directory -Path '$escaped' -Force | Out-Null
 "@ | Out-Null
 }
 
+function Reset-GuestPatchWorkspace {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential,
+        [Parameter(Mandatory)][string]$GuestWorkingDirectory
+    )
+
+    $escaped = $GuestWorkingDirectory.Replace("'", "''")
+    Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
+`$ErrorActionPreference = 'SilentlyContinue'
+`$root = '$escaped'
+if (-not (Test-Path -LiteralPath `$root)) { return }
+Get-ChildItem -LiteralPath `$root -Filter '*.pid' -File | ForEach-Object {
+    `$processId = 0
+    [void][int]::TryParse((Get-Content -LiteralPath `$_.FullName -Raw).Trim(), [ref]`$processId)
+    if (`$processId -gt 0) {
+        Stop-Process -Id `$processId -Force -ErrorAction SilentlyContinue
+    }
+}
+Get-ChildItem -LiteralPath `$root -File |
+    Where-Object { `$_.Name -like 'cycle-*' -or `$_.Name -like 'repair-*' } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+"@ | Out-Null
+}
+
 function Copy-PatchScriptToGuest {
     [CmdletBinding()]
     param(
@@ -615,6 +642,6 @@ function Test-GuestPatchConvergence {
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
     Repair-PatchVCenterSession, Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
     Wait-VMToolsReady, Invoke-GuestPowerShell, Enable-GuestLocalAdminTokenPolicy, Initialize-GuestPatchWorkspace,
-    Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
+    Reset-GuestPatchWorkspace, Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
     Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts, Invoke-GuestWindowsUpdateRepair,
     Copy-GuestPatchArtifacts, Restart-PatchVMGuest, Invoke-GuestPostRebootWarmUp, Test-GuestPatchConvergence
