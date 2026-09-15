@@ -148,6 +148,31 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
         } -OperationName 'Stage guest patch scripts' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
             -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
 
+        $stage = 'PrepareGuestAutomation'
+        $tokenPolicy = Invoke-WithRetry -Operation {
+            Enable-GuestLocalAdminTokenPolicy -VM $vm -GuestCredential $workerGuestCredential
+        } -OperationName 'Enable guest local admin token policy' -MaxAttempts ([int]$workerSettings.retry.maxAttempts) `
+            -InitialDelaySeconds ([int]$workerSettings.retry.initialDelaySeconds) -OnRetry $logRetry
+        Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+            -Message 'Guest automation token policy verified.' -Data @{
+                changed = [bool]$tokenPolicy.Changed
+                previousValue = [int]$tokenPolicy.PreviousValue
+                currentValue = [int]$tokenPolicy.CurrentValue
+            }
+        if ([bool]$tokenPolicy.Changed) {
+            if (-not [bool]$workerSettings.autoRebootWhenRequired) {
+                throw "Guest token policy changed but autoRebootWhenRequired is disabled for '$vmName'."
+            }
+            $stage = 'Reboot'
+            $reboots++
+            Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
+                -Message 'Restarting guest after enabling LocalAccountTokenFilterPolicy.'
+            Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
+                -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
+                -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
+                -PostRebootWarmUpSeconds ([int]$workerSettings.postRebootWarmUpSeconds)
+        }
+
         $stage = 'RepairWindowsUpdate'
         Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
             -Message 'Running deep Windows Update Agent repair (DISM/SFC) before patching.'

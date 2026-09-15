@@ -27,6 +27,23 @@ the VM's `orchestrator.jsonl` and latest guest cycle result/log.
 - Check VMware Tools and Windows event logs for guest operation failures.
 - Review UAC remote restrictions and service-account policies.
 
+### `Start-Process : Access is denied` during repair or patch
+
+Local admin accounts such as `Admin` or `Administrator` can authenticate to Guest
+Operations while still running with a UAC-filtered token. Validation succeeds
+because it only runs a simple command, but repair/patch jobs launch background
+PowerShell workers and fail with `Access is denied`.
+
+The framework now:
+
+1. Sets `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\LocalAccountTokenFilterPolicy=1`
+   when missing, then reboots the guest if the value changed.
+2. Launches guest repair/patch workers with `Win32_Process.Create` instead of
+   `Start-Process`, which works with filtered local admin tokens.
+
+If a guest still fails, confirm the account is in the local Administrators group
+and retry after the automatic reboot.
+
 ## PowerCLI connection or certificate failure
 
 - Use the configured vCenter FQDN and verify DNS/time synchronization.

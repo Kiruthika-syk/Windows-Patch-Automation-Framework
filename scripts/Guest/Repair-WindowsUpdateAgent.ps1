@@ -75,11 +75,24 @@ function Invoke-ExternalCommand {
     )
 
     Write-RepairLog -Level Information -Stage $Stage -Message "Running $FilePath $($ArgumentList -join ' ')."
-    $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -Wait -PassThru -NoNewWindow
-    Write-RepairLog -Level Information -Stage $Stage -Message "Command completed." -Data @{
-        exitCode = $process.ExitCode
+    $argumentString = ($ArgumentList | ForEach-Object {
+        if ($_ -match '\s') { "`"$($_ -replace '"', '\"')`"" } else { $_ }
+    }) -join ' '
+    $commandLine = if ([string]::IsNullOrWhiteSpace($argumentString)) { $FilePath } else { "$FilePath $argumentString" }
+    $processClass = [wmiclass]'Win32_Process'
+    $createResult = $processClass.Create($commandLine)
+    if ($createResult.ReturnValue -ne 0) {
+        throw "Win32_Process.Create failed for '$FilePath' with return code $($createResult.ReturnValue)."
     }
-    return [int]$process.ExitCode
+    $processId = [int]$createResult.ProcessId
+    $process = Get-Process -Id $processId -ErrorAction Stop
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    Write-RepairLog -Level Information -Stage $Stage -Message "Command completed." -Data @{
+        exitCode = $exitCode
+        processId = $processId
+    }
+    return [int]$exitCode
 }
 
 $result = [ordered]@{

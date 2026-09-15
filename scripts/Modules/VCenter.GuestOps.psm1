@@ -181,6 +181,68 @@ function Invoke-GuestPowerShell {
     $result.ScriptOutput
 }
 
+function Enable-GuestLocalAdminTokenPolicy {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$VM,
+        [Parameter(Mandatory)][pscredential]$GuestCredential
+    )
+
+    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @'
+$ErrorActionPreference = 'Stop'
+$regPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+$current = 0
+try {
+    $current = [int](Get-ItemProperty -LiteralPath $regPath -Name LocalAccountTokenFilterPolicy -ErrorAction Stop).LocalAccountTokenFilterPolicy
+}
+catch {
+    $current = 0
+}
+$changed = $false
+if ($current -ne 1) {
+    New-ItemProperty -Path $regPath -Name LocalAccountTokenFilterPolicy -Value 1 -PropertyType DWord -Force | Out-Null
+    $changed = $true
+}
+[pscustomobject]@{
+    changed = $changed
+    previousValue = $current
+    currentValue = 1
+} | ConvertTo-Json -Compress
+'@
+
+    $parsed = $output.Trim() | ConvertFrom-Json
+    [pscustomobject]@{
+        Changed = [bool]$parsed.changed
+        PreviousValue = [int]$parsed.previousValue
+        CurrentValue = [int]$parsed.currentValue
+    }
+}
+
+function Get-GuestDetachedJobLauncherScript {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$EncodedCommand,
+        [Parameter(Mandatory)][string]$EscapedResultPath,
+        [Parameter(Mandatory)][string]$EscapedLogPath,
+        [Parameter(Mandatory)][string]$EscapedPidPath
+    )
+
+    @"
+`$ErrorActionPreference = 'Stop'
+Remove-Item -LiteralPath '$EscapedResultPath', '$EscapedLogPath', '$EscapedPidPath' -Force -ErrorAction SilentlyContinue
+`$exe = Join-Path `$env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+`$commandLine = "`$exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $EncodedCommand"
+`$processClass = [wmiclass]'Win32_Process'
+`$createResult = `$processClass.Create(`$commandLine)
+if (`$createResult.ReturnValue -ne 0) {
+    throw "Win32_Process.Create failed with return code `$(`$createResult.ReturnValue)."
+}
+`$processId = [int]`$createResult.ProcessId
+Set-Content -LiteralPath '$EscapedPidPath' -Value `$processId -Encoding ascii
+Write-Output `$processId
+"@
+}
+
 function Initialize-GuestPatchWorkspace {
     [CmdletBinding()]
     param(
@@ -232,14 +294,9 @@ function Start-GuestPatchCycle {
     $patchCommand = "& '$escapedScript' -Cycle $Cycle -ResultPath '$escapedResult' -LogPath '$escapedLog' -SearchCriteria '$escapedCriteria'"
     $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($patchCommand))
 
-    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
-`$ErrorActionPreference = 'Stop'
-Remove-Item -LiteralPath '$escapedResult', '$escapedLog', '$escapedPid' -Force -ErrorAction SilentlyContinue
-`$arguments = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','$encodedCommand')
-`$process = Start-Process -FilePath "`$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList `$arguments -WindowStyle Hidden -PassThru
-Set-Content -LiteralPath '$escapedPid' -Value `$process.Id -Encoding ascii
-Write-Output `$process.Id
-"@
+    $launcherScript = Get-GuestDetachedJobLauncherScript -EncodedCommand $encodedCommand `
+        -EscapedResultPath $escapedResult -EscapedLogPath $escapedLog -EscapedPidPath $escapedPid
+    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText $launcherScript
 
     [pscustomobject]@{
         ProcessId = [int]($output.Trim() -split '\s+')[-1]
@@ -341,14 +398,9 @@ function Start-GuestRepairJob {
     $repairCommand = "& '$escapedScript' -ResultPath '$escapedResult' -LogPath '$escapedLog' $deepRepairFlag"
     $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($repairCommand))
 
-    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText @"
-`$ErrorActionPreference = 'Stop'
-Remove-Item -LiteralPath '$escapedResult', '$escapedLog', '$escapedPid' -Force -ErrorAction SilentlyContinue
-`$arguments = @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','$encodedCommand')
-`$process = Start-Process -FilePath "`$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -ArgumentList `$arguments -WindowStyle Hidden -PassThru
-Set-Content -LiteralPath '$escapedPid' -Value `$process.Id -Encoding ascii
-Write-Output `$process.Id
-"@
+    $launcherScript = Get-GuestDetachedJobLauncherScript -EncodedCommand $encodedCommand `
+        -EscapedResultPath $escapedResult -EscapedLogPath $escapedLog -EscapedPidPath $escapedPid
+    $output = Invoke-GuestPowerShell -VM $VM -GuestCredential $GuestCredential -ScriptText $launcherScript
 
     [pscustomobject]@{
         ProcessId = [int]($output.Trim() -split '\s+')[-1]
@@ -562,7 +614,7 @@ function Test-GuestPatchConvergence {
 
 Export-ModuleMember -Function Initialize-PowerCLISession, Connect-PatchVCenter, Get-PatchVCenterSession,
     Repair-PatchVCenterSession, Get-PatchVMInventory, Test-GuestCredential, Get-UniquePatchVM, Test-VMToolsReady,
-    Wait-VMToolsReady, Invoke-GuestPowerShell, Initialize-GuestPatchWorkspace,
+    Wait-VMToolsReady, Invoke-GuestPowerShell, Enable-GuestLocalAdminTokenPolicy, Initialize-GuestPatchWorkspace,
     Copy-PatchScriptToGuest, Start-GuestPatchCycle, Wait-GuestPatchCycle,
     Start-GuestRepairJob, Wait-GuestRepairJob, Copy-GuestRepairArtifacts, Invoke-GuestWindowsUpdateRepair,
     Copy-GuestPatchArtifacts, Restart-PatchVMGuest, Invoke-GuestPostRebootWarmUp, Test-GuestPatchConvergence
