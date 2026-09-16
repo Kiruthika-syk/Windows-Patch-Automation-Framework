@@ -343,9 +343,28 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                     $completedConvergence = $true
                     break
                 }
+                if ($convergence.PendingUpdates -gt 0) {
+                    Write-StructuredLog -Path $vmLog -Level Warning -Stage Convergence -VMName $vmName `
+                        -Message 'Pending updates remain after reboot-only cycles; extending guest warm-up before retrying.'
+                    $consecutiveRebootOnlyCycles = 0
+                    Invoke-GuestPostRebootWarmUp -VM $vm -GuestCredential $workerGuestCredential `
+                        -WarmUpSeconds ([Math]::Max($postRebootWarmUpSeconds, 120))
+                    continue
+                }
             }
 
             if ($needsReboot) {
+                if ($isRebootOnlyCycle) {
+                    $convergence = & $testConvergence 'Reboot requested with zero installs; verifying pending updates before reboot.'
+                    if ($convergence.PendingUpdates -gt 0) {
+                        Write-StructuredLog -Path $vmLog -Level Warning -Stage Convergence -VMName $vmName `
+                            -Message 'Skipping reboot because updates are still pending; retrying patch cycle after warm-up.'
+                        Invoke-GuestPostRebootWarmUp -VM $vm -GuestCredential $workerGuestCredential `
+                            -WarmUpSeconds ([Math]::Max($postRebootWarmUpSeconds, 90))
+                        $consecutiveRebootOnlyCycles = 0
+                        continue
+                    }
+                }
                 if (-not [bool]$workerSettings.autoRebootWhenRequired) {
                     throw "Updates require a reboot but autoRebootWhenRequired is disabled for '$vmName'."
                 }

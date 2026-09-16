@@ -587,6 +587,17 @@ function Invoke-GuestWindowsUpdateRepair {
         [switch]$DeepRepair
     )
 
+    if (-not $DeepRepair) {
+        try {
+            return Invoke-GuestWindowsUpdateRepairSync -VM $VM -GuestCredential $GuestCredential `
+                -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory `
+                -LocalDirectory $LocalDirectory -DeepRepair:$DeepRepair
+        }
+        catch {
+            # Fall back to detached worker for environments where sync repair fails.
+        }
+    }
+
     try {
         $repairHandle = Start-GuestRepairJob -VM $VM -GuestCredential $GuestCredential `
             -GuestScriptPath $GuestScriptPath -GuestWorkingDirectory $GuestWorkingDirectory -DeepRepair:$DeepRepair

@@ -290,12 +290,20 @@ try {
         if (Test-WindowsUpdateComError -ErrorRecord $_) {
             Repair-WindowsUpdateAgent
             $result.remediationApplied = $true
-            $result.rebootRequired = $true
-            $result.status = 'RebootRequired'
-            Write-GuestLog -Level Warning -Stage Remediation -Message 'Windows Update COM still unavailable after remediation; reboot is required before retrying.'
-            return
+            Start-Sleep -Seconds 30
+            try {
+                $sessionContext = New-WindowsUpdateSession
+            }
+            catch {
+                $result.rebootRequired = $true
+                $result.status = 'RebootRequired'
+                Write-GuestLog -Level Warning -Stage Remediation -Message 'Windows Update COM still unavailable after remediation; reboot is required before retrying.'
+                return
+            }
         }
-        throw
+        else {
+            throw
+        }
     }
 
     $result.remediationApplied = [bool]$sessionContext.RemediationApplied
