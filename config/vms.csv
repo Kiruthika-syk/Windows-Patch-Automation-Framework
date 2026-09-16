@@ -1,3 +1,4 @@
 VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow,IPAddress,FQDN,Notes
 blr-122106 VS,true,blr-vsphere-01.strykercorp.com,BLR,NEPTUNE,Sunday-0200-UTC,10.90.122.106,blr-122106vs.vcraeng.com,Compliant - Azure Arc KB5121364 installed Sep 2026
 BLR-AARYA-VS,true,blr-vsphere-01.strykercorp.com,BLR,Shrikant Raghuvanshi,Sunday-0200-UTC,10.90.128.199,blr-aarya-vs.vcraeng.com,Compliant - 8 updates installed Sep 2026; guest user admin
+blr-b7-beta-vcg,true,blr-vsphere-01.strykercorp.com,BLR,Nagendra Babu Gurram,Sunday-0200-UTC,10.90.104.195,blr-b7-beta-vcg.vcraeng.com,EMS Dev Firmware - first patch

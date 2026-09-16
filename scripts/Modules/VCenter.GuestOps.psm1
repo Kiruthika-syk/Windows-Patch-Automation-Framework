@@ -701,7 +701,9 @@ function Test-GuestPatchConvergence {
     'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations'
 ) | Where-Object { Test-Path -LiteralPath `$_ }
 `$pendingCount = [int]`$result.Updates.Count
-`$isCompliant = (`$pendingCount -eq 0) -and (`$registryRebootPending.Count -eq 0) -and (-not [bool]`$info.RebootRequired)
+# Pending count and registry reboot keys are authoritative. SystemInfo.RebootRequired can remain
+# stale after updates are fully installed and causes false MaxCyclesExceeded / reboot-only loops.
+`$isCompliant = (`$pendingCount -eq 0) -and (`$registryRebootPending.Count -eq 0)
 [pscustomobject]@{
     pendingUpdates = `$pendingCount
     rebootRequired = [bool]`$info.RebootRequired

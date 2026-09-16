@@ -22,4 +22,11 @@ unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PAS
 source "$CRED_FILE"
 
 cd "$ROOT"
+
+# Publish inventory to the internal website before and after the patch run.
+pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
+
 ./scripts/execute_repair_and_patch.sh "$INVENTORY"
+
+pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
+echo "Website fleet status updated: docs/fleet-status.json (refresh http://10.90.105.221:8080/)"

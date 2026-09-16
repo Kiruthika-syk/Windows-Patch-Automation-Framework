@@ -50,8 +50,14 @@ echo "=== Enabled VMs ==="
 awk -F, 'NR==1 || $2 ~ /^(true|yes|1)$/i {print}' config/vms.csv
 
 echo ""
+echo "=== Refreshing website inventory ==="
+pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
+
+echo ""
 echo "=== Starting patch run (all enabled VMs in parallel) ==="
 pwsh -NoProfile -File ./scripts/Validate-PatchEnvironment.ps1 -ExecutePatch
+
+pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
 
 echo ""
 echo "=== Patch run finished. Reports in output/ ==="

@@ -415,6 +415,7 @@ tail -f output/&lt;run-id&gt;/vm-logs/blr-damo-test02/orchestrator.jsonl
 # Final status
 cat output/&lt;run-id&gt;/compliance-report.csv</code></pre>
         <p><strong>Success:</strong> status <code>Compliant</code>, zero pending updates. Typical runtime: 10–30+ minutes.</p>
+        <p>When the patch finishes, the website <a href="#results">BLR patch results</a> section updates automatically (refresh the browser with Ctrl+F5).</p>
 
         <h3>Common mistakes</h3>
         <table>
@@ -640,6 +641,7 @@ gh run watch --repo Kiruthika-syk/Windows-Patch-Automation-Framework</code></pre
         <p>One-line role for each component in the framework.</p>
         <div class="card-grid">
           <div class="card"><h4>run_patch_with_creds.sh</h4><p>Patch one inventory CSV using a chosen credential file.</p></div>
+          <div class="card"><h4>Update-DocsSite.ps1</h4><p>Rebuilds <code>docs/fleet-status.json</code> for the internal website (runs automatically after each patch).</p></div>
           <div class="card"><h4>execute_repair_and_patch.sh</h4><p>Loads credentials, validates, then runs full patch job.</p></div>
           <div class="card"><h4>Validate-PatchEnvironment.ps1</h4><p>Read-only: tests vCenter + guest login per VM.</p></div>
           <div class="card"><h4>Invoke-WindowsPatchAutomation.ps1</h4><p>Main orchestrator: parallel workers, cycles, reboots, reports.</p></div>
@@ -753,67 +755,50 @@ gh run watch --repo Kiruthika-syk/Windows-Patch-Automation-Framework</code></pre
 
       <section id="results">
         <h2>BLR patch results</h2>
-        <p>Fleet status from all validation and patch runs on <code>blr-vsphere-01.strykercorp.com</code> (Sep 7–15, 2026).</p>
+        <p>Fleet status from all patch runs on <code>blr-vsphere-01.strykercorp.com</code>. <strong>Auto-updated</strong> after every patch job completes.</p>
+        <p id="fleet-generated-at" class="meta" style="color:var(--muted);font-size:0.9rem;">Loading fleet status…</p>
 
-        <div class="score-grid">
-          <div class="score-box"><div class="num status-ok">2</div><div class="lbl">Compliant VMs</div></div>
-          <div class="score-box"><div class="num">4</div><div class="lbl">Successful patch runs</div></div>
-          <div class="score-box"><div class="num">9</div><div class="lbl">Updates installed</div></div>
+        <div class="score-grid" id="fleet-summary">
+          <div class="score-box"><div class="num status-ok" id="summary-compliant">—</div><div class="lbl">Compliant VMs</div></div>
+          <div class="score-box"><div class="num status-warn" id="summary-patching">—</div><div class="lbl">Patching now</div></div>
+          <div class="score-box"><div class="num" id="summary-runs">—</div><div class="lbl">Patch runs</div></div>
+          <div class="score-box"><div class="num" id="summary-updates">—</div><div class="lbl">Updates installed</div></div>
         </div>
 
         <h3>Current fleet status</h3>
         <table>
           <thead>
-            <tr><th>VM</th><th>IP</th><th>Guest user</th><th>Status</th><th>Updates</th><th>Notes</th></tr>
+            <tr><th>VM</th><th>IP</th><th>Owner</th><th>Status</th><th>Updates</th><th>Last run</th><th>Notes</th></tr>
           </thead>
-          <tbody>
-            <tr>
-              <td>BLR-AARYA-VS</td><td>10.90.128.199</td><td>admin</td>
-              <td class="status-ok">Compliant</td><td>8 total</td>
-              <td>v3 run Sep 15 — 0 pending, 1 cycle, 1.7 min</td>
-            </tr>
-            <tr>
-              <td>blr-122106 VS</td><td>10.90.122.106</td><td>Administrator</td>
-              <td class="status-ok">Compliant</td><td>1</td>
-              <td>Azure Arc KB5121364 — Sep 7</td>
-            </tr>
+          <tbody id="fleet-status-body">
+            <tr><td colspan="7">Loading…</td></tr>
           </tbody>
         </table>
 
-        <h3>BLR-AARYA-VS — updates installed (runs 1 &amp; 2)</h3>
+        <h3>Recent updates installed</h3>
         <table>
-          <thead><tr><th>KB</th><th>Update</th><th>Run</th></tr></thead>
-          <tbody>
-            <tr><td>KB5007651</td><td>Windows Security platform</td><td>Run 1 · Sep 8</td></tr>
-            <tr><td>KB890830</td><td>MSRT v5.144 / v5.145</td><td>Run 1 &amp; 2</td></tr>
-            <tr><td>KB5121364</td><td>Azure Connected Machine Agent</td><td>Run 1</td></tr>
-            <tr><td>KB5120708</td><td>.NET Framework Security (Aug 2026)</td><td>Run 1</td></tr>
-            <tr><td>KB5120233</td><td>Security Update (Aug 2026)</td><td>Run 1</td></tr>
-            <tr><td>KB5122871</td><td>Security Update (Sep 2026)</td><td>Run 2</td></tr>
-            <tr><td>KB5126052</td><td>.NET Framework Security (Sep 2026)</td><td>Run 2</td></tr>
+          <thead><tr><th>VM</th><th>KB</th><th>Update</th><th>Date</th></tr></thead>
+          <tbody id="recent-updates-body">
+            <tr><td colspan="4">Loading…</td></tr>
           </tbody>
         </table>
 
         <h3>Run history</h3>
         <table>
-          <thead><tr><th>VM</th><th>Run</th><th>Date</th><th>Status</th><th>Installed</th><th>Report folder</th></tr></thead>
-          <tbody>
-            <tr><td>BLR-AARYA-VS</td><td>v3</td><td>Sep 15</td><td class="status-ok">Compliant</td><td>0 (already patched)</td><td><code>7becc7c7853a4bb0afa1b9c2da60fc3a</code></td></tr>
-            <tr><td>BLR-AARYA-VS</td><td>v2</td><td>Sep 10</td><td class="status-ok">Compliant</td><td>3</td><td><code>c78d72c4937944d7bd9d607f41dabc8a</code></td></tr>
-            <tr><td>BLR-AARYA-VS</td><td>v1</td><td>Sep 8</td><td class="status-ok">Compliant</td><td>5</td><td><code>5637de7a54484859a587b219ba128f86</code></td></tr>
-            <tr><td>blr-122106 VS</td><td>v1</td><td>Sep 7</td><td class="status-ok">Compliant</td><td>1</td><td><code>8e5b69254c1c45fd92c366769e376fd1</code></td></tr>
+          <thead><tr><th>VM</th><th>Date</th><th>Status</th><th>Installed</th><th>Cycles</th><th>Report folder</th></tr></thead>
+          <tbody id="run-history-body">
+            <tr><td colspan="6">Loading…</td></tr>
           </tbody>
         </table>
       </section>
 
       <section id="inventory">
-        <h2>VM inventory (<code>config/vms.csv</code>)</h2>
-        <p>Production inventory — Compliant VMs only.</p>
+        <h2>VM inventory</h2>
+        <p>From <code>config/vms.csv</code> and single-VM CSV files in <code>output/*-only.csv</code>. Updated automatically after each patch run.</p>
         <table>
-          <thead><tr><th>VMName</th><th>IP</th><th>Enabled</th><th>Owner</th><th>FQDN</th></tr></thead>
-          <tbody>
-            <tr><td>BLR-AARYA-VS</td><td>10.90.128.199</td><td>true</td><td>Shrikant Raghuvanshi</td><td>blr-aarya-vs.vcraeng.com</td></tr>
-            <tr><td>blr-122106 VS</td><td>10.90.122.106</td><td>true</td><td>NEPTUNE</td><td>blr-122106vs.vcraeng.com</td></tr>
+          <thead><tr><th>VMName</th><th>IP</th><th>Enabled</th><th>Owner</th><th>FQDN</th><th>Patch status</th></tr></thead>
+          <tbody id="inventory-body">
+            <tr><td colspan="6">Loading…</td></tr>
           </tbody>
         </table>
       </section>
@@ -839,7 +824,7 @@ gh run watch --repo Kiruthika-syk/Windows-Patch-Automation-Framework</code></pre
       </section>
 
       <footer class="footer">
-        Windows Patch Automation Framework · Updated 15 Sep 2026 ·
+        Windows Patch Automation Framework · <span id="footer-updated">Updated —</span> ·
         Open at <code>http://10.90.105.221:8080/</code> (HTTP, not HTTPS)
       </footer>
     </main>
@@ -862,6 +847,102 @@ gh run watch --repo Kiruthika-syk/Windows-Patch-Automation-Framework</code></pre
     }
     window.addEventListener('scroll', updateNav);
     updateNav();
+
+    function esc(text) {
+      return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    async function loadFleetStatus() {
+      const targets = {
+        generated: document.getElementById('fleet-generated-at'),
+        footer: document.getElementById('footer-updated'),
+        compliant: document.getElementById('summary-compliant'),
+        patching: document.getElementById('summary-patching'),
+        runs: document.getElementById('summary-runs'),
+        updates: document.getElementById('summary-updates'),
+        fleet: document.getElementById('fleet-status-body'),
+        recent: document.getElementById('recent-updates-body'),
+        history: document.getElementById('run-history-body'),
+        inventory: document.getElementById('inventory-body')
+      };
+
+      try {
+        const res = await fetch('fleet-status.json?_=' + Date.now());
+        if (!res.ok) throw new Error('fleet-status.json not found');
+        const data = await res.json();
+
+        if (targets.generated) {
+          targets.generated.textContent = 'Last refreshed: ' + (data.generatedAtDisplay || data.generatedAtUtc || 'Unknown');
+        }
+        if (targets.footer) {
+          targets.footer.textContent = 'Updated ' + (data.generatedAtDisplay || '—');
+        }
+        if (targets.compliant) targets.compliant.textContent = data.summary?.compliantVms ?? '0';
+        if (targets.patching) targets.patching.textContent = data.summary?.patchingVms ?? '0';
+        if (targets.runs) targets.runs.textContent = data.summary?.totalRuns ?? '0';
+        if (targets.updates) targets.updates.textContent = data.summary?.totalUpdatesInstalled ?? '0';
+
+        if (targets.fleet) {
+          const rows = (data.fleetStatus || []).map(vm => `
+            <tr>
+              <td>${esc(vm.vmName)}</td>
+              <td>${esc(vm.ipAddress)}</td>
+              <td>${esc(vm.owner)}</td>
+              <td class="${esc(vm.statusClass)}">${esc(vm.status)}</td>
+              <td>${esc(vm.updatesInstalled)} installed</td>
+              <td><code>${esc((vm.lastRunId || '').slice(0, 8))}</code> · ${esc(vm.lastRunDisplay)}</td>
+              <td>${esc(vm.notes)}</td>
+            </tr>`).join('');
+          targets.fleet.innerHTML = rows || '<tr><td colspan="7">No patch runs yet.</td></tr>';
+        }
+
+        if (targets.recent) {
+          const rows = (data.recentUpdates || []).map(u => `
+            <tr>
+              <td>${esc(u.vmName)}</td>
+              <td>${esc(u.kb)}</td>
+              <td>${esc(u.title)}</td>
+              <td>${esc(u.date)}</td>
+            </tr>`).join('');
+          targets.recent.innerHTML = rows || '<tr><td colspan="4">No updates recorded yet.</td></tr>';
+        }
+
+        if (targets.history) {
+          const rows = (data.runHistory || []).map(r => `
+            <tr>
+              <td>${esc(r.vmName)}</td>
+              <td>${esc(r.date)}</td>
+              <td class="${esc(r.statusClass)}">${esc(r.status)}</td>
+              <td>${esc(r.installed)}</td>
+              <td>${esc(r.cycles)}</td>
+              <td><code>${esc(r.runId)}</code></td>
+            </tr>`).join('');
+          targets.history.innerHTML = rows || '<tr><td colspan="6">No runs yet.</td></tr>';
+        }
+
+        if (targets.inventory) {
+          const rows = (data.inventory || []).map(i => `
+            <tr>
+              <td>${esc(i.vmName)}</td>
+              <td>${esc(i.ipAddress)}</td>
+              <td>${esc(i.enabled)}</td>
+              <td>${esc(i.owner)}</td>
+              <td>${esc(i.fqdn)}</td>
+              <td class="${esc(i.patchStatusClass)}">${esc(i.patchStatus)}</td>
+            </tr>`).join('');
+          targets.inventory.innerHTML = rows || '<tr><td colspan="6">No inventory rows yet.</td></tr>';
+        }
+      } catch (err) {
+        const msg = esc(err.message);
+        if (targets.generated) targets.generated.textContent = 'Fleet status unavailable — run ./scripts/update-docs-site.sh after a patch completes.';
+        [targets.fleet, targets.recent, targets.history, targets.inventory].forEach(el => {
+          if (el) el.innerHTML = `<tr><td colspan="7">Could not load fleet-status.json (${msg}). Run <code>./scripts/update-docs-site.sh</code>.</td></tr>`;
+        });
+      }
+    }
+
+    loadFleetStatus();
+    setInterval(loadFleetStatus, 15000);
   </script>
 </body>
 </html>

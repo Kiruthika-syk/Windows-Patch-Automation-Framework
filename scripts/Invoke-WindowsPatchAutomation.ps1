@@ -65,6 +65,15 @@ Write-StructuredLog -Path $masterLog -Level Information -Stage Run -Message 'Pat
     maxPatchCycles = [int]$settings.maxPatchCycles
 }
 
+try {
+    & (Join-Path $PSScriptRoot 'Update-DocsSite.ps1') | Out-Null
+}
+catch {
+    Write-StructuredLog -Path $masterLog -Level Warning -Stage Run -Message 'Failed to refresh docs site at patch start.' -Data @{
+        error = $_.Exception.Message
+    }
+}
+
 $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.throttleLimit) -Parallel {
     $row = $_
     Import-Module $using:commonModule -Force
@@ -355,14 +364,15 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
 
             if ($needsReboot) {
                 if ($isRebootOnlyCycle) {
-                    $convergence = & $testConvergence 'Reboot requested with zero installs; verifying pending updates before reboot.'
+                    $convergence = & $testConvergence 'Reboot requested with zero installs; checking guest state before reboot.'
+                    if ($convergence.IsCompliant) {
+                        $status = 'Compliant'
+                        $completedConvergence = $true
+                        break
+                    }
                     if ($convergence.PendingUpdates -gt 0) {
-                        Write-StructuredLog -Path $vmLog -Level Warning -Stage Convergence -VMName $vmName `
-                            -Message 'Skipping reboot because updates are still pending; retrying patch cycle after warm-up.'
-                        Invoke-GuestPostRebootWarmUp -VM $vm -GuestCredential $workerGuestCredential `
-                            -WarmUpSeconds ([Math]::Max($postRebootWarmUpSeconds, 90))
-                        $consecutiveRebootOnlyCycles = 0
-                        continue
+                        Write-StructuredLog -Path $vmLog -Level Information -Stage Convergence -VMName $vmName `
+                            -Message 'Rebooting despite pending updates to recover Windows Update COM or complete staged installs.'
                     }
                 }
                 if (-not [bool]$workerSettings.autoRebootWhenRequired) {
@@ -370,8 +380,9 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
                 }
                 $stage = 'Reboot'
                 $reboots++
+                $rebootReason = if ($isRebootOnlyCycle) { 'Windows Update agent recovery or pending reboot flag.' } else { 'update installation.' }
                 Write-StructuredLog -Path $vmLog -Level Information -Stage $stage -VMName $vmName `
-                    -Message 'Restarting guest after update installation.'
+                    -Message "Restarting guest after $rebootReason"
                 Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
                     -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
                     -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
@@ -391,6 +402,21 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
             if ($convergence.IsCompliant) {
                 $status = 'Compliant'
                 $completedConvergence = $true
+            }
+            elseif ($convergence.PendingUpdates -gt 0 -and [bool]$workerSettings.autoRebootWhenRequired) {
+                Write-StructuredLog -Path $vmLog -Level Warning -Stage Convergence -VMName $vmName `
+                    -Message 'Final recovery reboot before marking non-compliant.'
+                $stage = 'Reboot'
+                $reboots++
+                Restart-PatchVMGuest -VM $vm -Server $viServer -GuestCredential $workerGuestCredential `
+                    -TimeoutSeconds ([int]$workerSettings.timeouts.rebootSeconds) `
+                    -PollSeconds ([int]$workerSettings.pollIntervalSeconds) `
+                    -PostRebootWarmUpSeconds ([Math]::Max($postRebootWarmUpSeconds, 120))
+                $convergence = & $testConvergence 'Final recovery reboot convergence verification.'
+                if ($convergence.IsCompliant) {
+                    $status = 'Compliant'
+                    $completedConvergence = $true
+                }
             }
         }
 
@@ -433,6 +459,18 @@ $workerResults = @($inventory | ForEach-Object -ThrottleLimit ([int]$settings.th
 })
 
 $reports = Export-ComplianceReports -Results $workerResults -OutputDirectory $runDirectory
+
+try {
+    & (Join-Path $PSScriptRoot 'Update-DocsSite.ps1') | Out-Null
+    Write-StructuredLog -Path $masterLog -Level Information -Stage Run -Message 'Internal docs site fleet status refreshed.' -Data @{
+        fleetStatusJson = (Join-Path $PSScriptRoot '../docs/fleet-status.json')
+    }
+}
+catch {
+    Write-StructuredLog -Path $masterLog -Level Warning -Stage Run -Message 'Failed to refresh internal docs site fleet status.' -Data @{
+        error = $_.Exception.Message
+    }
+}
 
 # Build a deterministic master JSONL log from the run envelope and isolated VM logs.
 $vmLogFiles = @(Get-ChildItem -LiteralPath $vmLogsDirectory -Filter '*.jsonl' -File -Recurse | Sort-Object FullName)

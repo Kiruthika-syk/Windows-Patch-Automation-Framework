@@ -4,9 +4,9 @@
   "guestWorkingDirectory": "C:\\ProgramData\\EnterprisePatchAutomation",
   "windowsUpdateSearchCriteria": "IsInstalled=0 and IsHidden=0",
   "autoRebootWhenRequired": true,
-  "maxPatchCycles": 8,
-  "maxRebootOnlyCycles": 2,
-  "postRebootWarmUpSeconds": 90,
+  "maxPatchCycles": 12,
+  "maxRebootOnlyCycles": 3,
+  "postRebootWarmUpSeconds": 120,
   "throttleLimit": 4,
   "pollIntervalSeconds": 15,
   "timeouts": {
