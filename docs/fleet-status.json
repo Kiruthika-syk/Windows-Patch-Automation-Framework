@@ -1,45 +1,29 @@
 {
-  "generatedAtUtc": "2026-09-16T11:06:27.8504920Z",
-  "generatedAtDisplay": "16 Sep 2026 11:06 UTC",
+  "generatedAtUtc": "2026-09-16T11:28:57.7657571Z",
+  "generatedAtDisplay": "16 Sep 2026 11:28 UTC",
   "summary": {
     "compliantVms": 3,
     "patchingVms": 3,
     "registeredVms": 0,
-    "trackedVms": 7,
+    "trackedVms": 6,
     "totalRuns": 18,
     "activeRuns": 3,
     "totalUpdatesInstalled": 9.0
   },
-  "fleetStatus": [
+  "inventory": [
     {
       "vmName": "blr-122105 VMP",
       "ipAddress": "10.90.122.105",
       "fqdn": "blr-122105vmp.vcraeng.com",
       "owner": "NEPTUNE",
       "environment": "BLR",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "updatesInstalled": 0,
-      "updatesFound": 0,
-      "cycles": 5,
-      "lastRunId": "c999bd975afa4dc9b9f8e5fada622368",
-      "lastRunUtc": "2026-09-08T04:41:52.0000000Z",
-      "lastRunDisplay": "08 Sep 2026 04:41 UTC",
-      "notes": "Re-patch after MaxCyclesExceeded fix"
-    },
-    {
-      "vmName": "blr-122105_VMP",
-      "ipAddress": "",
-      "fqdn": "",
-      "owner": "",
-      "environment": "",
-      "status": "Patching",
-      "statusClass": "status-warn",
+      "enabled": "true",
+      "patchResult": "Patching",
+      "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
       "cycles": 0,
       "lastRunId": "eecabf86907346bcbd2cfb1653751b39",
-      "lastRunUtc": "2026-09-16T11:06:12.9634459Z",
       "lastRunDisplay": "16 Sep 2026 16:36 UTC",
       "notes": "Patch run in progress — refresh page to see live status."
     },
@@ -49,13 +33,13 @@
       "fqdn": "blr-122106vs.vcraeng.com",
       "owner": "NEPTUNE",
       "environment": "BLR",
-      "status": "Compliant",
-      "statusClass": "status-ok",
+      "enabled": "true",
+      "patchResult": "Compliant",
+      "patchStatusClass": "status-ok",
       "updatesInstalled": 1,
       "updatesFound": 1,
       "cycles": 2,
       "lastRunId": "8e5b69254c1c45fd92c366769e376fd1",
-      "lastRunUtc": "2026-09-07T07:19:02.0000000Z",
       "lastRunDisplay": "07 Sep 2026 07:19 UTC",
       "notes": "Compliant - Azure Arc KB5121364 installed Sep 2026"
     },
@@ -65,13 +49,13 @@
       "fqdn": "blr-aarya-vs.vcraeng.com",
       "owner": "Shrikant Raghuvanshi",
       "environment": "BLR",
-      "status": "Compliant",
-      "statusClass": "status-ok",
+      "enabled": "true",
+      "patchResult": "Compliant",
+      "patchStatusClass": "status-ok",
       "updatesInstalled": 0,
       "updatesFound": 0,
       "cycles": 1,
       "lastRunId": "7becc7c7853a4bb0afa1b9c2da60fc3a",
-      "lastRunUtc": "2026-09-15T04:17:29.0000000Z",
       "lastRunDisplay": "15 Sep 2026 04:17 UTC",
       "notes": "Project Macaw - 6 pending updates"
     },
@@ -81,13 +65,13 @@
       "fqdn": "blr-b7-beta-vcg.vcraeng.com",
       "owner": "Nagendra Babu Gurram",
       "environment": "BLR",
-      "status": "Patching",
-      "statusClass": "status-warn",
+      "enabled": "true",
+      "patchResult": "Patching",
+      "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
       "cycles": 0,
       "lastRunId": "b27e3531a63d4d2280b69021e8bd2b5a",
-      "lastRunUtc": "2026-09-16T10:44:18.1917604Z",
       "lastRunDisplay": "16 Sep 2026 16:14 UTC",
       "notes": "Patch run in progress — refresh page to see live status."
     },
@@ -97,13 +81,13 @@
       "fqdn": "blr-damo-test02.vcraeng.com",
       "owner": "Vijay Bhaskar",
       "environment": "BLR",
-      "status": "Patching",
-      "statusClass": "status-warn",
+      "enabled": "true",
+      "patchResult": "Patching",
+      "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
       "cycles": 0,
       "lastRunId": "e7bdd1afd90d4640b47ee21b06e38ffd",
-      "lastRunUtc": "2026-09-16T10:57:46.7524901Z",
       "lastRunDisplay": "16 Sep 2026 16:27 UTC",
       "notes": "Patch run in progress — refresh page to see live status."
     },
@@ -113,333 +97,15 @@
       "fqdn": "BLR-DHA-TESTING02.vcraeng.com",
       "owner": "Geetha",
       "environment": "BLR",
-      "status": "Compliant",
-      "statusClass": "status-ok",
+      "enabled": "true",
+      "patchResult": "Compliant",
+      "patchStatusClass": "status-ok",
       "updatesInstalled": 0,
       "updatesFound": 0,
       "cycles": 1,
       "lastRunId": "4449c7a34f6a406681056a7973fa3a07",
-      "lastRunUtc": "2026-09-16T02:21:02.0000000Z",
       "lastRunDisplay": "16 Sep 2026 02:21 UTC",
       "notes": "DHA testing server - Devices Firmware EMS"
-    }
-  ],
-  "runHistory": [
-    {
-      "vmName": "blr-b7-beta-vcg",
-      "runId": "b27e3531a63d4d2280b69021e8bd2b5a",
-      "date": "In progress",
-      "status": "Patching",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "e7bdd1afd90d4640b47ee21b06e38ffd",
-      "date": "In progress",
-      "status": "Patching",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-122105_VMP",
-      "runId": "eecabf86907346bcbd2cfb1653751b39",
-      "date": "In progress",
-      "status": "Patching",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "053ace49a1b54826b7ac107b2b96c949",
-      "date": "16 Sep 2026",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 8
-    },
-    {
-      "vmName": "BLR-DHA-TESTING02",
-      "runId": "4449c7a34f6a406681056a7973fa3a07",
-      "date": "16 Sep 2026",
-      "status": "Compliant",
-      "statusClass": "status-ok",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "runId": "7becc7c7853a4bb0afa1b9c2da60fc3a",
-      "date": "15 Sep 2026",
-      "status": "Compliant",
-      "statusClass": "status-ok",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "ff99a642b65546fa8ca8150cd56dc799",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "aaf594cc35f4487ebdc9c2c78f09902b",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "6655dfdafa194c3c93dad6d937accaf6",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "88c4aed2b2514c9a9be5d4388480bb33",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "2698f872687d4758bfd4e4457c9b944f",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "BLR-DHA-TESTING02",
-      "runId": "49369f0ba66142009b882d843b24fcce",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 0
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "runId": "87b1d9a31fb94a0abeab665e86eee2a3",
-      "date": "15 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "runId": "c78d72c4937944d7bd9d607f41dabc8a",
-      "date": "10 Sep 2026",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "installed": 3,
-      "cycles": 5
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "installed": 5,
-      "cycles": 5
-    },
-    {
-      "vmName": "blr-122105 VMP",
-      "runId": "c999bd975afa4dc9b9f8e5fada622368",
-      "date": "08 Sep 2026",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 5
-    },
-    {
-      "vmName": "blr-122105 VMP",
-      "runId": "9c46efca842e4b96ad43eb5f9622c81f",
-      "date": "08 Sep 2026",
-      "status": "MaxCyclesExceeded",
-      "statusClass": "status-warn",
-      "installed": 0,
-      "cycles": 5
-    },
-    {
-      "vmName": "blr-122105 VMP",
-      "runId": "7e38f5f89459402eaf8b2e31d0196fca",
-      "date": "08 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "blr-122105 VMP",
-      "runId": "a6b947c9231c41908fcad3e1c6a8baad",
-      "date": "08 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 2
-    },
-    {
-      "vmName": "blr-122105 VMP",
-      "runId": "8e5b69254c1c45fd92c366769e376fd1",
-      "date": "07 Sep 2026",
-      "status": "Failed",
-      "statusClass": "status-fail",
-      "installed": 0,
-      "cycles": 1
-    },
-    {
-      "vmName": "blr-122106 VS",
-      "runId": "8e5b69254c1c45fd92c366769e376fd1",
-      "date": "07 Sep 2026",
-      "status": "Compliant",
-      "statusClass": "status-ok",
-      "installed": 1,
-      "cycles": 2
-    }
-  ],
-  "inventory": [
-    {
-      "vmName": "blr-122105 VMP",
-      "ipAddress": "10.90.122.105",
-      "enabled": "true",
-      "owner": "NEPTUNE",
-      "fqdn": "blr-122105vmp.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "MaxCyclesExceeded",
-      "patchStatusClass": "status-warn"
-    },
-    {
-      "vmName": "blr-122106 VS",
-      "ipAddress": "10.90.122.106",
-      "enabled": "true",
-      "owner": "NEPTUNE",
-      "fqdn": "blr-122106vs.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "Compliant",
-      "patchStatusClass": "status-ok"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "ipAddress": "10.90.128.199",
-      "enabled": "true",
-      "owner": "Shrikant Raghuvanshi",
-      "fqdn": "blr-aarya-vs.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "Compliant",
-      "patchStatusClass": "status-ok"
-    },
-    {
-      "vmName": "blr-b7-beta-vcg",
-      "ipAddress": "10.90.104.195",
-      "enabled": "true",
-      "owner": "Nagendra Babu Gurram",
-      "fqdn": "blr-b7-beta-vcg.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "Patching",
-      "patchStatusClass": "status-warn"
-    },
-    {
-      "vmName": "blr-damo-test02",
-      "ipAddress": "10.90.120.242",
-      "enabled": "true",
-      "owner": "Vijay Bhaskar",
-      "fqdn": "blr-damo-test02.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "Patching",
-      "patchStatusClass": "status-warn"
-    },
-    {
-      "vmName": "BLR-DHA-TESTING02",
-      "ipAddress": "10.90.105.67",
-      "enabled": "true",
-      "owner": "Geetha",
-      "fqdn": "BLR-DHA-TESTING02.vcraeng.com",
-      "environment": "BLR",
-      "patchStatus": "Compliant",
-      "patchStatusClass": "status-ok"
-    }
-  ],
-  "recentUpdates": [
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB890830",
-      "title": "Windows Malicious Software Removal Tool x64 - v5.145 (KB890830)",
-      "runId": "c78d72c4937944d7bd9d607f41dabc8a",
-      "date": "10 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5122871",
-      "title": "2026-09 Security Update (KB5122871) (26100.33438)",
-      "runId": "c78d72c4937944d7bd9d607f41dabc8a",
-      "date": "10 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5126052",
-      "title": "2026-09 .NET Framework Security Update (KB5126052)",
-      "runId": "c78d72c4937944d7bd9d607f41dabc8a",
-      "date": "10 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5007651",
-      "title": "Update for Windows Security platform - KB5007651 (Version 10.0.29628.1000)",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB890830",
-      "title": "Windows Malicious Software Removal Tool x64 - v5.144 (KB890830)",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5121364",
-      "title": "Azure Connected Machine Agent (Arc-enabled servers agent) Version 1.67.03504.3207",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5120708",
-      "title": "2026-08 .NET Framework Security Update (KB5120708)",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026"
-    },
-    {
-      "vmName": "BLR-AARYA-VS",
-      "kb": "KB5120233",
-      "title": "2026-08 Security Update (KB5120233) (26100.33296)",
-      "runId": "5637de7a54484859a587b219ba128f86",
-      "date": "08 Sep 2026"
-    },
-    {
-      "vmName": "blr-122106 VS",
-      "kb": "KB5121364",
-      "title": "Azure Connected Machine Agent (Arc-enabled servers agent) Version 1.67.03504.3207",
-      "runId": "8e5b69254c1c45fd92c366769e376fd1",
-      "date": "07 Sep 2026"
     }
   ]
 }

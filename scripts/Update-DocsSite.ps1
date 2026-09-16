@@ -74,6 +74,28 @@ function Test-EnabledInventoryRow {
     $Enabled -match '^(?i:true|yes|1)$'
 }
 
+function Resolve-InventoryVMName {
+    param(
+        [string]$Candidate,
+        [hashtable]$InventoryMap
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Candidate)) { return $Candidate }
+    $name = $Candidate.Trim()
+    if ($InventoryMap.ContainsKey($name)) { return $name }
+
+    $spaced = $name -replace '_', ' '
+    if ($InventoryMap.ContainsKey($spaced)) { return $spaced }
+
+    $compact = ($name -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+    foreach ($key in $InventoryMap.Keys) {
+        $keyCompact = ($key -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+        if ($keyCompact -eq $compact) { return $key }
+    }
+
+    return $name
+}
+
 $inventoryPaths = @($configInventory) + @(
     Get-ChildItem -LiteralPath $outputRoot -Filter '*-only.csv' -File -ErrorAction SilentlyContinue |
         ForEach-Object FullName
@@ -103,9 +125,10 @@ foreach ($runDir in $runDirs) {
                     $activeVms = @(Get-ChildItem -LiteralPath $vmLogsRoot -Directory | ForEach-Object { $_.Name })
                 }
                 foreach ($vmName in $activeVms) {
+                    $resolvedName = Resolve-InventoryVMName -Candidate $vmName -InventoryMap $inventoryMap
                     $inProgressRuns.Add([pscustomobject]@{
                             RunId = $runDir.Name
-                            VMName = $vmName
+                            VMName = $resolvedName
                             Status = 'Patching'
                             StartUtc = $startedUtc
                         })
@@ -134,9 +157,10 @@ foreach ($runDir in $runDirs) {
                 if ($_.kbArticleIds) { ($_.kbArticleIds -join ', ') }
             } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
+        $resolvedVmName = Resolve-InventoryVMName -Candidate ([string]$result.VMName) -InventoryMap $inventoryMap
         $runRecords.Add([pscustomobject]@{
                 RunId = $runDir.Name
-                VMName = [string]$result.VMName
+                VMName = $resolvedVmName
                 Status = [string]$result.Status
                 Cycles = [int]$result.Cycles
                 UpdatesFound = [int]$result.UpdatesFound
@@ -157,34 +181,32 @@ $orderedRuns = @($runRecords | Sort-Object SortUtc -Descending)
 
 $latestByVm = @{}
 foreach ($run in $orderedRuns) {
-    if (-not $latestByVm.ContainsKey($run.VMName)) {
-        $latestByVm[$run.VMName] = $run
+    $resolvedName = Resolve-InventoryVMName -Candidate $run.VMName -InventoryMap $inventoryMap
+    if (-not $latestByVm.ContainsKey($resolvedName)) {
+        $latestByVm[$resolvedName] = $run
         continue
     }
-    $existing = $latestByVm[$run.VMName]
+    $existing = $latestByVm[$resolvedName]
     if ($run.SortUtc -gt $existing.SortUtc) {
-        $latestByVm[$run.VMName] = $run
+        $latestByVm[$resolvedName] = $run
     }
     elseif ($run.SortUtc -eq $existing.SortUtc -and $run.Status -eq 'Compliant' -and $existing.Status -ne 'Compliant') {
-        $latestByVm[$run.VMName] = $run
+        $latestByVm[$resolvedName] = $run
     }
 }
 
 $inProgressByVm = @{}
 foreach ($active in $inProgressRuns) {
-    $inProgressByVm[$active.VMName] = $active
+    $resolvedName = Resolve-InventoryVMName -Candidate $active.VMName -InventoryMap $inventoryMap
+    $inProgressByVm[$resolvedName] = $active
 }
 
 $fleetVmNames = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 foreach ($name in $latestByVm.Keys) { [void]$fleetVmNames.Add($name) }
 foreach ($name in $inProgressByVm.Keys) { [void]$fleetVmNames.Add($name) }
-foreach ($meta in $inventoryMap.Values) {
-    if (Test-EnabledInventoryRow -Enabled $meta.Enabled) {
-        [void]$fleetVmNames.Add($meta.VMName)
-    }
-}
+foreach ($meta in $inventoryMap.Values) { [void]$fleetVmNames.Add($meta.VMName) }
 
-$fleetStatus = @($fleetVmNames | Sort-Object | ForEach-Object {
+$inventory = @($fleetVmNames | Sort-Object | ForEach-Object {
         $vmName = $_
         if ($inProgressByVm.ContainsKey($vmName)) {
             $active = $inProgressByVm[$vmName]
@@ -196,13 +218,13 @@ $fleetStatus = @($fleetVmNames | Sort-Object | ForEach-Object {
                 fqdn = if ($meta) { $meta.FQDN } else { '' }
                 owner = if ($meta) { $meta.Owner } else { '' }
                 environment = if ($meta) { $meta.Environment } else { '' }
-                status = 'Patching'
-                statusClass = Get-StatusClass -Status 'Patching'
+                enabled = if ($meta) { $meta.Enabled } else { 'false' }
+                patchResult = 'Patching'
+                patchStatusClass = Get-StatusClass -Status 'Patching'
                 updatesInstalled = 0
                 updatesFound = 0
                 cycles = 0
                 lastRunId = $active.RunId
-                lastRunUtc = $active.StartUtc
                 lastRunDisplay = $startDisplay
                 notes = 'Patch run in progress — refresh page to see live status.'
             }
@@ -216,24 +238,28 @@ $fleetStatus = @($fleetVmNames | Sort-Object | ForEach-Object {
                 fqdn = if ($meta) { $meta.FQDN } else { '' }
                 owner = if ($meta) { $meta.Owner } else { '' }
                 environment = if ($meta) { $meta.Environment } else { '' }
-                status = 'Registered'
-                statusClass = Get-StatusClass -Status 'Registered'
+                enabled = if ($meta) { $meta.Enabled } else { 'false' }
+                patchResult = if ($meta -and (Test-EnabledInventoryRow -Enabled $meta.Enabled)) { 'Registered' } else { 'Not patched yet' }
+                patchStatusClass = if ($meta -and (Test-EnabledInventoryRow -Enabled $meta.Enabled)) { Get-StatusClass -Status 'Registered' } else { '' }
                 updatesInstalled = 0
                 updatesFound = 0
                 cycles = 0
                 lastRunId = ''
-                lastRunUtc = $null
                 lastRunDisplay = 'Not started'
-                notes = if ($meta -and $meta.Notes) { $meta.Notes } else { 'Added to inventory — awaiting first patch run.' }
+                notes = if ($meta -and $meta.Notes) { $meta.Notes } else { 'Awaiting first patch run.' }
             }
         }
 
         $_ = $latestByVm[$vmName]
         $meta = $inventoryMap[$_.VMName]
         $endDisplay = if ($_.SortUtc -gt [datetime]::MinValue) { $_.SortUtc.ToString('dd MMM yyyy HH:mm') + ' UTC' } else { 'Unknown' }
-        $notes = if ($meta -and -not [string]::IsNullOrWhiteSpace($meta.Notes)) { $meta.Notes }
-        elseif ($_.Status -eq 'Compliant') { "Last run $($_.RunId.Substring(0, 8)) — $($_.UpdatesInstalled) installed, $($_.Cycles) cycle(s)" }
-        else { [string]$_.ErrorMessage }
+        $notes = if ($_.Status -eq 'Compliant') {
+            if ($meta -and -not [string]::IsNullOrWhiteSpace($meta.Notes)) { $meta.Notes }
+            else { "$($_.UpdatesInstalled) update(s) installed in $($_.Cycles) cycle(s)" }
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$_.ErrorMessage)) { [string]$_.ErrorMessage }
+        elseif ($meta -and $meta.Notes) { $meta.Notes }
+        else { '' }
 
         [pscustomobject]@{
             vmName = $_.VMName
@@ -241,117 +267,31 @@ $fleetStatus = @($fleetVmNames | Sort-Object | ForEach-Object {
             fqdn = if ($meta) { $meta.FQDN } else { '' }
             owner = if ($meta) { $meta.Owner } else { '' }
             environment = if ($meta) { $meta.Environment } else { '' }
-            status = $_.Status
-            statusClass = Get-StatusClass -Status $_.Status
+            enabled = if ($meta) { $meta.Enabled } else { 'false' }
+            patchResult = $_.Status
+            patchStatusClass = Get-StatusClass -Status $_.Status
             updatesInstalled = $_.UpdatesInstalled
             updatesFound = $_.UpdatesFound
             cycles = $_.Cycles
             lastRunId = $_.RunId
-            lastRunUtc = $_.EndUtc
             lastRunDisplay = $endDisplay
             notes = $notes
         }
     } | Where-Object { $null -ne $_ })
 
-$runHistory = @($inProgressRuns | ForEach-Object {
-        [pscustomobject]@{
-            vmName = $_.VMName
-            runId = $_.RunId
-            date = 'In progress'
-            status = 'Patching'
-            statusClass = Get-StatusClass -Status 'Patching'
-            installed = 0
-            cycles = 0
-        }
-    })
-
-$runHistory += @($orderedRuns | ForEach-Object {
-        $endDisplay = if ($_.SortUtc -gt [datetime]::MinValue) { $_.SortUtc.ToString('dd MMM yyyy') } else { 'Unknown' }
-        [pscustomobject]@{
-            vmName = $_.VMName
-            runId = $_.RunId
-            date = $endDisplay
-            status = $_.Status
-            statusClass = Get-StatusClass -Status $_.Status
-            installed = $_.UpdatesInstalled
-            cycles = $_.Cycles
-        }
-    })
-$runHistory = @($runHistory | Sort-Object {
-        if ($_.status -eq 'Patching') { return [datetime]::MaxValue }
-        $parsed = [datetime]::MinValue
-        [void][datetime]::TryParse([string]$_.date, [ref]$parsed)
-        $parsed
-    } -Descending)
-
-$inventory = @($inventoryMap.Values | Sort-Object VMName | ForEach-Object {
-        $latest = $latestByVm[$_.VMName]
-        [pscustomobject]@{
-            vmName = $_.VMName
-            ipAddress = $_.IPAddress
-            enabled = $_.Enabled
-            owner = $_.Owner
-            fqdn = $_.FQDN
-            environment = $_.Environment
-            patchStatus = if ($inProgressByVm.ContainsKey($_.VMName)) { 'Patching' }
-            elseif ($latest) { $latest.Status }
-            elseif (Test-EnabledInventoryRow -Enabled $_.Enabled) { 'Registered' }
-            else { 'Not patched yet' }
-            patchStatusClass = if ($inProgressByVm.ContainsKey($_.VMName)) { Get-StatusClass -Status 'Patching' }
-            elseif ($latest) { Get-StatusClass -Status $latest.Status }
-            elseif (Test-EnabledInventoryRow -Enabled $_.Enabled) { Get-StatusClass -Status 'Registered' }
-            else { '' }
-        }
-    })
-
-$allVmsFromRuns = @($latestByVm.Keys | Sort-Object)
-foreach ($vmName in $allVmsFromRuns) {
-    if ($inventoryMap.ContainsKey($vmName)) { continue }
-    $latest = $latestByVm[$vmName]
-    $inventory += [pscustomobject]@{
-        vmName = $vmName
-        ipAddress = ''
-        enabled = 'false'
-        owner = ''
-        fqdn = ''
-        environment = ''
-        patchStatus = $latest.Status
-        patchStatusClass = Get-StatusClass -Status $latest.Status
-    }
-}
-$inventory = @($inventory | Sort-Object vmName)
-
-$recentUpdates = [System.Collections.Generic.List[object]]::new()
-foreach ($run in ($orderedRuns | Select-Object -First 20)) {
-    foreach ($update in @($run.Updates)) {
-        if ($update.result -notin 'Succeeded', 'SucceededWithErrors') { continue }
-        $kb = if ($update.kbArticleIds) { ($update.kbArticleIds -join ', ') } else { '' }
-        $recentUpdates.Add([pscustomobject]@{
-                vmName = $run.VMName
-                kb = $kb
-                title = [string]$update.title
-                runId = $run.RunId
-                date = if ($run.SortUtc -gt [datetime]::MinValue) { $run.SortUtc.ToString('dd MMM yyyy') } else { '' }
-            })
-    }
-}
-
 $payload = [ordered]@{
     generatedAtUtc = [DateTime]::UtcNow.ToString('o')
     generatedAtDisplay = ([DateTime]::UtcNow).ToString('dd MMM yyyy HH:mm') + ' UTC'
     summary = [ordered]@{
-        compliantVms = @($fleetStatus | Where-Object status -eq 'Compliant').Count
-        patchingVms = @($fleetStatus | Where-Object status -eq 'Patching').Count
-        registeredVms = @($fleetStatus | Where-Object status -eq 'Registered').Count
-        trackedVms = $fleetStatus.Count
+        compliantVms = @($inventory | Where-Object patchResult -eq 'Compliant').Count
+        patchingVms = @($inventory | Where-Object patchResult -eq 'Patching').Count
+        registeredVms = @($inventory | Where-Object patchResult -eq 'Registered').Count
+        trackedVms = $inventory.Count
         totalRuns = $runRecords.Count
         activeRuns = $inProgressRuns.Count
         totalUpdatesInstalled = ($runRecords | Measure-Object -Property UpdatesInstalled -Sum).Sum
     }
-    fleetStatus = $fleetStatus
-    runHistory = $runHistory
     inventory = $inventory
-    recentUpdates = @($recentUpdates | Select-Object -First 50)
 }
 
 $jsonDir = Split-Path -Parent $OutputJsonPath
