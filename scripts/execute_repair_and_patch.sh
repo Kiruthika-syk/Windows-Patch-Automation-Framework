@@ -7,9 +7,11 @@ cd "$ROOT"
 CRED_FILE="${HOME}/.windows_patch_creds"
 INVENTORY="${1:-./output/blr-122105-only.csv}"
 
-if [[ -f "$CRED_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$CRED_FILE"
+if [[ -z "${VCENTER_USERNAME:-}" || -z "${VCENTER_PASSWORD:-}" || -z "${WINDOWS_GUEST_USERNAME:-}" || -z "${WINDOWS_GUEST_PASSWORD:-}" ]]; then
+  if [[ -f "$CRED_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CRED_FILE"
+  fi
 fi
 
 if [[ -z "${VCENTER_USERNAME:-}" || -z "${VCENTER_PASSWORD:-}" || -z "${WINDOWS_GUEST_USERNAME:-}" || -z "${WINDOWS_GUEST_PASSWORD:-}" ]]; then
