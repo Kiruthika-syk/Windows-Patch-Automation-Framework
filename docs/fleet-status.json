@@ -1,13 +1,13 @@
 {
-  "generatedAtUtc": "2026-09-16T10:58:33.1012501Z",
-  "generatedAtDisplay": "16 Sep 2026 10:58 UTC",
+  "generatedAtUtc": "2026-09-16T11:06:27.8504920Z",
+  "generatedAtDisplay": "16 Sep 2026 11:06 UTC",
   "summary": {
     "compliantVms": 3,
-    "patchingVms": 2,
+    "patchingVms": 3,
     "registeredVms": 0,
-    "trackedVms": 6,
+    "trackedVms": 7,
     "totalRuns": 18,
-    "activeRuns": 2,
+    "activeRuns": 3,
     "totalUpdatesInstalled": 9.0
   },
   "fleetStatus": [
@@ -26,6 +26,22 @@
       "lastRunUtc": "2026-09-08T04:41:52.0000000Z",
       "lastRunDisplay": "08 Sep 2026 04:41 UTC",
       "notes": "Re-patch after MaxCyclesExceeded fix"
+    },
+    {
+      "vmName": "blr-122105_VMP",
+      "ipAddress": "",
+      "fqdn": "",
+      "owner": "",
+      "environment": "",
+      "status": "Patching",
+      "statusClass": "status-warn",
+      "updatesInstalled": 0,
+      "updatesFound": 0,
+      "cycles": 0,
+      "lastRunId": "eecabf86907346bcbd2cfb1653751b39",
+      "lastRunUtc": "2026-09-16T11:06:12.9634459Z",
+      "lastRunDisplay": "16 Sep 2026 16:36 UTC",
+      "notes": "Patch run in progress — refresh page to see live status."
     },
     {
       "vmName": "blr-122106 VS",
@@ -121,6 +137,15 @@
     {
       "vmName": "blr-damo-test02",
       "runId": "e7bdd1afd90d4640b47ee21b06e38ffd",
+      "date": "In progress",
+      "status": "Patching",
+      "statusClass": "status-warn",
+      "installed": 0,
+      "cycles": 0
+    },
+    {
+      "vmName": "blr-122105_VMP",
+      "runId": "eecabf86907346bcbd2cfb1653751b39",
       "date": "In progress",
       "status": "Patching",
       "statusClass": "status-warn",
