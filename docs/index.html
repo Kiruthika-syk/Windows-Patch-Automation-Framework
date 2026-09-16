@@ -264,6 +264,10 @@
         <a class="nav-link" href="#overview">What it does</a>
         <a class="nav-link" href="#flow">End-to-end flow</a>
         <a class="nav-link" href="#quickstart">Quick start</a>
+        <a class="nav-link" href="#execution">Execution commands</a>
+        <a class="nav-link" href="#fleet-run">Fleet run (all VMs)</a>
+        <a class="nav-link" href="#new-machine">Adding a new machine</a>
+        <a class="nav-link" href="#github-actions">GitHub pipeline</a>
       </div>
       <div class="nav-group">
         <div class="nav-group-title">Mechanism</div>
@@ -345,20 +349,255 @@ flowchart TD
           <li>PowerCLI 13.3 and PowerShell 7.2+ on the runner</li>
           <li>Guest can reach WSUS or Microsoft Update</li>
         </ul>
-        <h3>Run locally</h3>
-        <pre><code>cd Windows-Patch-Automation-Framework
+        <h3>Run locally (fleet)</h3>
+        <pre><code>cd /home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework
+unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PASSWORD
 source ~/.windows_patch_creds
 
-# Validate only
+# Validate only (enabled rows in config/vms.csv)
 pwsh -File ./scripts/Validate-PatchEnvironment.ps1
 
-# Validate and patch enabled VMs in config/vms.csv
-./scripts/execute_repair_and_patch.sh
-
-# Watch progress
-tail -f output/patch-run-*.log</code></pre>
+# Patch all enabled VMs in config/vms.csv (parallel, throttled)
+./scripts/execute_patch.sh</code></pre>
         <h3>Inventory row</h3>
         <p>Set <code>Enabled=true</code> in <code>config/vms.csv</code> only for approved VMs. Use exact vCenter VM name or provide IP for fallback lookup.</p>
+      </section>
+
+      <section id="execution">
+        <h2>Execution commands</h2>
+        <p>Run from the Linux runner (<code>blr-kiruthika</code>). Credentials are loaded with <code>source</code> — never execute the cred file directly.</p>
+
+        <h3>1. Credential file</h3>
+        <p>Create one file per guest password group (same password can share one file):</p>
+        <pre><code>vi ~/.windows_patch_creds
+chmod 600 ~/.windows_patch_creds</code></pre>
+        <pre><code>export VCENTER_USERNAME="ks4@vsphere.local"
+export VCENTER_PASSWORD="your-vcenter-password"
+export WINDOWS_GUEST_USERNAME="admin"
+export WINDOWS_GUEST_PASSWORD="your-guest-password"</code></pre>
+        <p>Example: <code>admin</code> for NEPTUNE/damo VMs; <code>Administrator</code> for DHA — use separate files if passwords differ:</p>
+        <pre><code>~/.windows_patch_creds          # damo / admin VMs
+~/.windows_patch_creds_dha       # BLR-DHA-TESTING02 / Administrator</code></pre>
+
+        <h3>2. Single-VM inventory CSV</h3>
+        <p>Create <code>output/&lt;vm&gt;-only.csv</code> so you do not patch the whole fleet:</p>
+        <pre><code>VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow,IPAddress,FQDN,Notes
+blr-damo-test02,true,blr-vsphere-01.strykercorp.com,BLR,Owner,Sunday-0200-UTC,10.90.120.242,blr-damo-test02.vcraeng.com,Single VM run
+BLR-DHA-TESTING02,true,blr-vsphere-01.strykercorp.com,BLR,Geetha,Sunday-0200-UTC,10.90.105.67,BLR-DHA-TESTING02.vcraeng.com,DHA testing</code></pre>
+
+        <h3>3. Validate one server (read-only)</h3>
+        <pre><code>cd /home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework
+unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PASSWORD
+source ~/.windows_patch_creds
+
+pwsh -File ./scripts/Validate-PatchEnvironment.ps1 \
+  -InventoryPath ./output/blr-damo-test02-only.csv</code></pre>
+        <p>Expect: <strong>VM found</strong>, <strong>GuestHost=</strong>, <strong>Validation completed successfully</strong>.</p>
+
+        <h3>4. Patch one server</h3>
+        <pre><code># Default cred file (~/.windows_patch_creds)
+./scripts/run_patch_with_creds.sh ./output/blr-damo-test02-only.csv
+
+# Alternate cred file (e.g. DHA Administrator)
+./scripts/run_patch_with_creds.sh \
+  ./output/blr-dha-testing02-only.csv \
+  ~/.windows_patch_creds_dha</code></pre>
+        <p>Equivalent manual form:</p>
+        <pre><code>source ~/.windows_patch_creds_dha
+./scripts/execute_repair_and_patch.sh ./output/blr-dha-testing02-only.csv</code></pre>
+
+        <h3>5. Monitor progress</h3>
+        <pre><code>ls -lt output/ | head -5
+
+# Live orchestrator log (replace run-id and vm folder)
+tail -f output/&lt;run-id&gt;/vm-logs/blr-damo-test02/orchestrator.jsonl
+
+# Final status
+cat output/&lt;run-id&gt;/compliance-report.csv</code></pre>
+        <p><strong>Success:</strong> status <code>Compliant</code>, zero pending updates. Typical runtime: 10–30+ minutes.</p>
+
+        <h3>Common mistakes</h3>
+        <table>
+          <thead><tr><th>Problem</th><th>Fix</th></tr></thead>
+          <tbody>
+            <tr><td><code>Permission denied</code> on cred file</td><td>Use <code>source ~/.windows_patch_creds</code>, not <code>~/.windows_patch_creds</code></td></tr>
+            <tr><td>Wrong guest user in validation output</td><td><code>unset</code> env vars, then <code>source</code> cred file again</td></tr>
+            <tr><td>Guest auth failed</td><td>Match RDP/console username (<code>admin</code> vs <code>Administrator</code>)</td></tr>
+            <tr><td>Two patch jobs on same VM</td><td>Run one job at a time per VM</td></tr>
+          </tbody>
+        </table>
+        <h3>6. Patch entire fleet (<code>config/vms.csv</code>)</h3>
+        <p>See <a href="#fleet-run">Fleet run (all VMs)</a> for the full checklist. Short form:</p>
+        <pre><code>unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PASSWORD
+source ~/.windows_patch_creds
+./scripts/execute_patch.sh</code></pre>
+        <p>All enabled rows in <code>config/vms.csv</code> must share the <strong>same guest username and password</strong> in that run.</p>
+      </section>
+
+      <section id="fleet-run">
+        <h2>Fleet run (all VMs at once)</h2>
+        <p>Use this when you want to patch every server listed in the main inventory (<code>config/vms.csv</code>) — the same list used for scheduled GitHub Actions.</p>
+
+        <h3>Before you start</h3>
+        <ul>
+          <li>Every VM you enable must use the <strong>same</strong> guest account for that run (<code>admin</code> or <code>Administrator</code>, one password).</li>
+          <li>If passwords differ, split into batches (separate CSV + cred file per batch) — do not mix in one run.</li>
+          <li>Take vCenter snapshots on production VMs before a fleet patch.</li>
+          <li>Confirm VMware Tools are running on all targets.</li>
+        </ul>
+
+        <h3>Step 1 — Review inventory</h3>
+        <pre><code>cd /home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework
+
+# Show rows that will be patched
+awk -F, 'NR==1 || $2 ~ /^(true|yes|1)$/i {print}' config/vms.csv</code></pre>
+        <p>Edit <code>config/vms.csv</code> (or export from Excel and save as CSV with the same columns). Set <code>Enabled=true</code> only for VMs approved this window.</p>
+
+        <h3>Step 2 — Credentials</h3>
+        <pre><code>vi ~/.windows_patch_creds
+chmod 600 ~/.windows_patch_creds
+
+unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PASSWORD
+source ~/.windows_patch_creds</code></pre>
+
+        <h3>Step 3 — Validate fleet (read-only)</h3>
+        <pre><code>pwsh -File ./scripts/Validate-PatchEnvironment.ps1 \
+  -InventoryPath ./config/vms.csv</code></pre>
+        <p>Fix any VM not found, Tools not running, or guest auth failures before patching.</p>
+
+        <h3>Step 4 — Patch all enabled VMs</h3>
+        <pre><code>./scripts/execute_patch.sh</code></pre>
+        <p>Equivalent PowerShell form:</p>
+        <pre><code>pwsh -File ./scripts/Validate-PatchEnvironment.ps1 \
+  -InventoryPath ./config/vms.csv \
+  -ExecutePatch</code></pre>
+        <p>Runs up to <code>throttleLimit</code> VMs in parallel (default 4 in <code>config/settings.json</code>).</p>
+
+        <h3>Step 5 — Review reports</h3>
+        <pre><code>ls -lt output/ | head -5
+cat output/&lt;run-id&gt;/compliance-report.csv
+# Open in browser: output/&lt;run-id&gt;/compliance-report.html</code></pre>
+        <p><strong>Success:</strong> every row shows <code>Compliant</code> with zero pending updates.</p>
+
+        <h3>Different guest passwords in the fleet</h3>
+        <p>Example: NEPTUNE VMs use <code>admin</code>, DHA uses <code>Administrator</code>. Run two batches:</p>
+        <pre><code># Batch A — admin password group
+source ~/.windows_patch_creds
+./scripts/run_patch_with_creds.sh ./output/neptune-batch-only.csv
+
+# Batch B — Administrator password group
+./scripts/run_patch_with_creds.sh ./output/dha-batch-only.csv ~/.windows_patch_creds_dha</code></pre>
+        <p>Create each batch CSV with only the VMs that share credentials, all with <code>Enabled=true</code>.</p>
+      </section>
+
+      <section id="new-machine">
+        <h2>Adding a new machine</h2>
+        <p>Onboard one server safely before enabling it in the main fleet CSV.</p>
+
+        <h3>Collect before you add</h3>
+        <table>
+          <thead><tr><th>Field</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td>Exact vCenter VM name</td><td><code>blr-damo-test02</code></td></tr>
+            <tr><td>IP (from vCenter guest summary)</td><td><code>10.90.120.242</code></td></tr>
+            <tr><td>vCenter</td><td><code>blr-vsphere-01.strykercorp.com</code></td></tr>
+            <tr><td>Guest username</td><td><code>admin</code> or <code>Administrator</code></td></tr>
+            <tr><td>Guest password</td><td>Must work via Guest Operations (not RDP-only)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Step 1 — Snapshot in vCenter</h3>
+        <p>VM → Snapshots → Take Snapshot (before first patch).</p>
+
+        <h3>Step 2 — Single-VM inventory file</h3>
+        <pre><code>cat &gt; output/new-server-only.csv &lt;&lt;'EOF'
+VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow,IPAddress,FQDN,Notes
+YOUR-VM-NAME,true,blr-vsphere-01.strykercorp.com,BLR,OwnerName,Sunday-0200-UTC,10.90.x.x,your-vm.vcraeng.com,First patch
+EOF</code></pre>
+        <p>Do not put passwords in the CSV.</p>
+
+        <h3>Step 3 — Credentials</h3>
+        <pre><code>unset VCENTER_USERNAME VCENTER_PASSWORD WINDOWS_GUEST_USERNAME WINDOWS_GUEST_PASSWORD
+source ~/.windows_patch_creds   # or ~/.windows_patch_creds_dha</code></pre>
+
+        <h3>Step 4 — Validate (read-only)</h3>
+        <pre><code>pwsh -File ./scripts/Validate-PatchEnvironment.ps1 \
+  -InventoryPath ./output/new-server-only.csv</code></pre>
+        <p>Expect: VM found, Tools running, <code>GuestHost=</code> shows hostname.</p>
+
+        <h3>Step 5 — Patch the new server</h3>
+        <pre><code>./scripts/run_patch_with_creds.sh ./output/new-server-only.csv
+# or with alternate cred file:
+./scripts/run_patch_with_creds.sh ./output/new-server-only.csv ~/.windows_patch_creds_dha</code></pre>
+
+        <h3>Step 6 — Confirm Compliant</h3>
+        <pre><code>cat output/&lt;run-id&gt;/compliance-report.csv</code></pre>
+
+        <h3>Step 7 — Add to main inventory</h3>
+        <p>After a successful run, append the row to <code>config/vms.csv</code> with <code>Enabled=true</code> so it is included in fleet runs and GitHub Actions:</p>
+        <pre><code>VMName,Enabled,VCenterServer,Environment,Owner,MaintenanceWindow,IPAddress,FQDN,Notes
+YOUR-VM-NAME,true,blr-vsphere-01.strykercorp.com,BLR,OwnerName,Sunday-0200-UTC,10.90.x.x,your-vm.vcraeng.com,Compliant - first patch Sep 2026</code></pre>
+        <p>Commit and push <code>config/vms.csv</code> if you use the GitHub pipeline.</p>
+
+        <h3>Quick checklist</h3>
+        <ol class="steps">
+          <li>Snapshot VM</li>
+          <li>Create <code>output/&lt;vm&gt;-only.csv</code></li>
+          <li>Set creds in <code>~/.windows_patch_creds</code></li>
+          <li>Validate</li>
+          <li>Patch</li>
+          <li>Confirm Compliant</li>
+          <li>Add row to <code>config/vms.csv</code></li>
+        </ol>
+        <p>Full guide: <code>docs/New-Server-Execution-Steps.md</code> in the repo.</p>
+      </section>
+
+      <section id="github-actions">
+        <h2>GitHub pipeline (Actions)</h2>
+        <p>Yes — you can trigger patching from the GitHub repo. Workflow file: <code>.github/workflows/windows-patch.yml</code>.</p>
+
+        <h3>What runs</h3>
+        <ol class="steps">
+          <li><strong>Validate</strong> — Pester tests on GitHub-hosted Ubuntu (no vCenter needed).</li>
+          <li><strong>Patch</strong> — Full fleet patch on a <strong>self-hosted Windows runner</strong> with labels <code>self-hosted</code>, <code>windows</code>, <code>vcenter</code>.</li>
+          <li><strong>Artifacts</strong> — Uploads <code>output/</code> (reports + JSONL logs) for 30 days.</li>
+        </ol>
+
+        <h3>Prerequisites (one-time)</h3>
+        <ul>
+          <li>Self-hosted Windows runner registered to the repo with labels above and network access to vCenter (HTTPS 443).</li>
+          <li>GitHub environment <code>windows-patching</code> with secrets:
+            <code>VCENTER_USERNAME</code>, <code>VCENTER_PASSWORD</code>,
+            <code>WINDOWS_GUEST_USERNAME</code>, <code>WINDOWS_GUEST_PASSWORD</code>.
+          </li>
+          <li>Target VMs listed in <code>config/vms.csv</code> with <code>Enabled=true</code>.</li>
+          <li>One guest password per workflow run — batch only VMs that share the same guest credentials.</li>
+        </ul>
+
+        <h3>Manual trigger from GitHub UI</h3>
+        <ol class="steps">
+          <li>Open <a href="https://github.com/Kiruthika-syk/Windows-Patch-Automation-Framework/actions/workflows/windows-patch.yml">Actions → Windows Patch Automation</a>.</li>
+          <li>Click <strong>Run workflow</strong> (dropdown on the right).</li>
+          <li>Select branch <code>main</code>, then <strong>Run workflow</strong>.</li>
+          <li>Wait for job <em>Validate framework</em>, then <em>Patch Windows fleet</em>.</li>
+          <li>Download artifact <code>windows-patch-results-&lt;run-id&gt;</code> when complete.</li>
+        </ol>
+
+        <h3>Trigger from CLI (gh)</h3>
+        <pre><code>gh workflow run windows-patch.yml --repo Kiruthika-syk/Windows-Patch-Automation-Framework
+
+# Watch run status
+gh run list --workflow=windows-patch.yml --repo Kiruthika-syk/Windows-Patch-Automation-Framework
+gh run watch --repo Kiruthika-syk/Windows-Patch-Automation-Framework</code></pre>
+
+        <h3>Scheduled runs</h3>
+        <p>Cron is configured for <strong>Sunday 02:00 UTC</strong> (<code>0 2 * * 0</code>). Edit the workflow file to change the schedule.</p>
+
+        <div class="card" style="margin-top:1rem;padding:1rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border);">
+          <h4>GitHub vs Linux runner</h4>
+          <p><strong>GitHub Actions</strong> patches all enabled VMs in <code>config/vms.csv</code> using repo secrets.</p>
+          <p><strong>Linux runner (blr-kiruthika)</strong> is better for single-VM runs via <code>output/*-only.csv</code> and per-server cred files — what you use for damo/DHA testing today.</p>
+        </div>
       </section>
 
       <section id="connection">
@@ -400,6 +639,7 @@ tail -f output/patch-run-*.log</code></pre>
         <h2>Scripts reference</h2>
         <p>One-line role for each component in the framework.</p>
         <div class="card-grid">
+          <div class="card"><h4>run_patch_with_creds.sh</h4><p>Patch one inventory CSV using a chosen credential file.</p></div>
           <div class="card"><h4>execute_repair_and_patch.sh</h4><p>Loads credentials, validates, then runs full patch job.</p></div>
           <div class="card"><h4>Validate-PatchEnvironment.ps1</h4><p>Read-only: tests vCenter + guest login per VM.</p></div>
           <div class="card"><h4>Invoke-WindowsPatchAutomation.ps1</h4><p>Main orchestrator: parallel workers, cycles, reboots, reports.</p></div>
