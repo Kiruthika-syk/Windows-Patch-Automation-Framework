@@ -1,0 +1,3 @@
+# Hourly cleanup of completed patch run logs (24h retention).
+# Install: crontab -e
+# 0 * * * * PATCH_OUTPUT_RETENTION_HOURS=24 /home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/scripts/cleanup-patch-output.sh >> /home/tpx-admin/.cursor-server/Windows-Patch-Automation-Framework/output/cleanup.log 2>&1

@@ -50,6 +50,10 @@ echo "=== Enabled VMs ==="
 awk -F, 'NR==1 || $2 ~ /^(true|yes|1)$/i {print}' config/vms.csv
 
 echo ""
+echo "=== Cleaning up patch output older than ${PATCH_OUTPUT_RETENTION_HOURS:-24}h ==="
+./scripts/cleanup-patch-output.sh >/dev/null 2>&1 || true
+
+echo ""
 echo "=== Refreshing website inventory ==="
 pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
 
@@ -58,6 +62,7 @@ echo "=== Starting patch run (all enabled VMs in parallel) ==="
 pwsh -NoProfile -File ./scripts/Validate-PatchEnvironment.ps1 -ExecutePatch
 
 pwsh -NoProfile -File ./scripts/Update-DocsSite.ps1 >/dev/null || true
+./scripts/cleanup-patch-output.sh >/dev/null 2>&1 || true
 
 echo ""
 echo "=== Patch run finished. Reports in output/ ==="

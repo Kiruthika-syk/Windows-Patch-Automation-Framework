@@ -1,13 +1,13 @@
 {
-  "generatedAtUtc": "2026-09-16T11:28:57.7657571Z",
-  "generatedAtDisplay": "16 Sep 2026 11:28 UTC",
+  "generatedAtUtc": "2026-09-18T07:26:30.7242458Z",
+  "generatedAtDisplay": "18 Sep 2026 07:26 UTC",
   "summary": {
     "compliantVms": 3,
-    "patchingVms": 3,
-    "registeredVms": 0,
-    "trackedVms": 6,
-    "totalRuns": 18,
-    "activeRuns": 3,
+    "patchingVms": 0,
+    "registeredVms": 1,
+    "trackedVms": 7,
+    "totalRuns": 20,
+    "activeRuns": 0,
     "totalUpdatesInstalled": 9.0
   },
   "inventory": [
@@ -18,14 +18,14 @@
       "owner": "NEPTUNE",
       "environment": "BLR",
       "enabled": "true",
-      "patchResult": "Patching",
+      "patchResult": "MaxCyclesExceeded",
       "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
-      "cycles": 0,
-      "lastRunId": "eecabf86907346bcbd2cfb1653751b39",
-      "lastRunDisplay": "16 Sep 2026 16:36 UTC",
-      "notes": "Patch run in progress — refresh page to see live status."
+      "cycles": 5,
+      "lastRunId": "c999bd975afa4dc9b9f8e5fada622368",
+      "lastRunDisplay": "08 Sep 2026 04:41 UTC",
+      "notes": "Applicable updates remain after the safety cap of 5 cycles."
     },
     {
       "vmName": "blr-122106 VS",
@@ -60,20 +60,36 @@
       "notes": "Project Macaw - 6 pending updates"
     },
     {
+      "vmName": "blr-astrion-01",
+      "ipAddress": "10.90.129.16",
+      "fqdn": "blr-astrion-01.vcraeng.com",
+      "owner": "EMS Engineering",
+      "environment": "BLR",
+      "enabled": "true",
+      "patchResult": "Registered",
+      "patchStatusClass": "",
+      "updatesInstalled": 0,
+      "updatesFound": 0,
+      "cycles": 0,
+      "lastRunId": "",
+      "lastRunDisplay": "Not started",
+      "notes": "EMS Dev - first patch"
+    },
+    {
       "vmName": "blr-b7-beta-vcg",
       "ipAddress": "10.90.104.195",
       "fqdn": "blr-b7-beta-vcg.vcraeng.com",
       "owner": "Nagendra Babu Gurram",
       "environment": "BLR",
       "enabled": "true",
-      "patchResult": "Patching",
+      "patchResult": "MaxCyclesExceeded",
       "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
-      "cycles": 0,
-      "lastRunId": "b27e3531a63d4d2280b69021e8bd2b5a",
-      "lastRunDisplay": "16 Sep 2026 16:14 UTC",
-      "notes": "Patch run in progress — refresh page to see live status."
+      "cycles": 12,
+      "lastRunId": "5387363b1c8941c1aed8e95e713807e1",
+      "lastRunDisplay": "16 Sep 2026 07:42 UTC",
+      "notes": "Applicable updates remain after the safety cap of 12 cycles."
     },
     {
       "vmName": "blr-damo-test02",
@@ -82,14 +98,14 @@
       "owner": "Vijay Bhaskar",
       "environment": "BLR",
       "enabled": "true",
-      "patchResult": "Patching",
+      "patchResult": "MaxCyclesExceeded",
       "patchStatusClass": "status-warn",
       "updatesInstalled": 0,
       "updatesFound": 0,
-      "cycles": 0,
+      "cycles": 12,
       "lastRunId": "e7bdd1afd90d4640b47ee21b06e38ffd",
-      "lastRunDisplay": "16 Sep 2026 16:27 UTC",
-      "notes": "Patch run in progress — refresh page to see live status."
+      "lastRunDisplay": "16 Sep 2026 07:07 UTC",
+      "notes": "Applicable updates remain after the safety cap of 12 cycles."
     },
     {
       "vmName": "BLR-DHA-TESTING02",

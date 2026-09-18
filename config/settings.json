@@ -19,5 +19,6 @@
   "retry": {
     "maxAttempts": 3,
     "initialDelaySeconds": 10
-  }
+  },
+  "outputRetentionHours": 24
 }
